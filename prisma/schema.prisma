@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Multi-tenant root ────────────────────────────────────────────────────────
+model Gym {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String   @default("UTC")
+  hours     Json?    // working hours config, null = always open
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  plans        MembershipPlan[]
+  memberships  Membership[]
+  entries      Entry[]
+  devices      Device[]
+}
+
+// ─── Auth (Better Auth compatible) ───────────────────────────────────────────
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  phone         String?
+  role          Role     @default(MEMBER)
+  gymId         String
+  pin           String?  // plaintext 6-digit PIN for door entry (unique per gym)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  gym          Gym          @relation(fields: [gymId], references: [id])
+  sessions     Session[]
+  accounts     Account[]
+  memberships  Membership[]
+  entries      Entry[]
+  rfidTags     RfidTag[]
+
+  @@unique([gymId, pin])
+}
+
+enum Role {
+  OWNER
+  STAFF
+  MEMBER
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  userId    String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ─── Membership Plans (per gym) ───────────────────────────────────────────────
+model MembershipPlan {
+  id           String   @id @default(cuid())
+  gymId        String
+  name         String
+  description  String?
+  type         PlanType
+  // TIME_BASED: number of calendar days the membership lasts
+  durationDays Int?
+  // SESSION_BASED: total sessions included
+  sessionCount Int?
+  price        Decimal  @db.Decimal(10, 2)
+  currency     String   @default("EUR")
+  // max entries allowed per day (usually 1)
+  maxPerDay    Int      @default(1)
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  gym         Gym          @relation(fields: [gymId], references: [id])
+  memberships Membership[]
+}
+
+enum PlanType {
+  TIME_BASED
+  SESSION_BASED
+}
+
+// ─── Client Memberships ───────────────────────────────────────────────────────
+model Membership {
+  id     String           @id @default(cuid())
+  gymId  String
+  userId String
+  planId String
+  status MembershipStatus @default(ACTIVE)
+
+  // TIME_BASED fields
+  startsAt  DateTime  @default(now())
+  expiresAt DateTime?
+
+  // SESSION_BASED fields
+  sessionsTotal Int?
+  sessionsUsed  Int? @default(0)
+
+  // Per-membership overrides
+  maxPerDay Int?
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gym     Gym            @relation(fields: [gymId], references: [id])
+  user    User           @relation(fields: [userId], references: [id])
+  plan    MembershipPlan @relation(fields: [planId], references: [id])
+  entries Entry[]
+}
+
+enum MembershipStatus {
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+// ─── Entry Log ────────────────────────────────────────────────────────────────
+model Entry {
+  id           String      @id @default(cuid())
+  gymId        String
+  userId       String
+  membershipId String?
+  method       EntryMethod
+  enteredAt    DateTime    @default(now())
+  notes        String?
+
+  gym        Gym        @relation(fields: [gymId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+  membership Membership? @relation(fields: [membershipId], references: [id])
+}
+
+enum EntryMethod {
+  RFID
+  PHONE
+  MANUAL
+  PIN
+}
+
+// ─── RFID Tags ────────────────────────────────────────────────────────────────
+model RfidTag {
+  id        String   @id @default(cuid())
+  tagId     String   @unique
+  userId    String
+  label     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── Hardware Devices (ESP32 door readers) ────────────────────────────────────
+model Device {
+  id         String    @id @default(cuid())
+  gymId      String
+  name       String
+  secret     String    @unique
+  isOnline   Boolean   @default(false)
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  gym Gym @relation(fields: [gymId], references: [id])
+}

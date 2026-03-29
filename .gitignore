@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+.env
+.env.local
+.env.*.local
+src/generated/
+dist/
+build/
+npm-debug.log*
+.DS_Store
+*.pem
+esp32/config.h
