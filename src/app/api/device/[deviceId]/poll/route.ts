@@ -10,7 +10,7 @@ import { ok, err, unauthorized } from "@/lib/api-helpers";
 
 const PollSchema = z.object({ secret: z.string().min(1) });
 
-const HOLD_MS    = 8000; // hold connection up to 8s (Vercel free = 10s max)
+const HOLD_MS    = 5000; // hold connection up to 5s (Vercel free = 10s max, need margin)
 const TICK_MS    = 500;  // check DB every 500ms
 
 export async function POST(
