@@ -85,8 +85,9 @@ export default async function DevicesPage() {
 
       <div className="text-sm text-muted-foreground bg-muted rounded-lg p-4 space-y-2">
         <p className="font-medium">Vodič za integraciju ESP32</p>
-        <p>Uređaj se pretplaćuje na MQTT temu <code className="bg-background px-1 rounded">macaw/device/[deviceId]/open</code> za komande otvaranja vrata u realnom vremenu.</p>
+        <p>Uređaj poluje na <code className="bg-background px-1 rounded">POST /api/device/[deviceId]/poll</code> za komande otvaranja (long polling, do 8s).</p>
         <p>Za RFID skeniranja, POST na <code className="bg-background px-1 rounded">/api/device/[deviceId]/rfid</code> sa <code className="bg-background px-1 rounded">{"{ tagId, secret }"}</code>.</p>
+        <p>Nakon otvaranja vrata, potvrdi na <code className="bg-background px-1 rounded">/api/device/[deviceId]/confirm</code> sa <code className="bg-background px-1 rounded">{"{ commandId, secret }"}</code>.</p>
       </div>
     </div>
   );
