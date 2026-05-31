@@ -110,6 +110,16 @@ void pollDoorCommands() {
 void handleRfidScan(const String& tagId) {
   Serial.printf("[RFID] Tag: %s\n", tagId.c_str());
 
+  // Master cards bypass the server entirely — instant open
+  static const char* masterUids[] = MASTER_UIDS;
+  for (size_t i = 0; masterUids[i] != nullptr; i++) {
+    if (tagId.equalsIgnoreCase(masterUids[i])) {
+      Serial.println("[RFID] MASTER card — opening");
+      openDoor();
+      return;
+    }
+  }
+
   String path = String("/api/device/") + DEVICE_ID + "/rfid";
   StaticJsonDocument<256> req;
   req["secret"] = DEVICE_SECRET;

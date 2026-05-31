@@ -6,6 +6,10 @@
 #define SERVER_URL     "https://macaw-v2.vercel.app"
 #define DEVICE_ID      "your_device_id"
 #define DEVICE_SECRET  "your_device_secret"
-#define MQTT_HOST      "your_cluster.hivemq.cloud"
-#define MQTT_USERNAME  "your_mqtt_username"
-#define MQTT_PASSWORD  "your_mqtt_password"
+
+// Master cards — scanned UIDs that open the door instantly, no server call.
+// Useful for owner/family cards that must always work (even offline).
+// Add each UID as a hex string (uppercase, no spaces). End the list with nullptr.
+// To get a card's UID: scan it and read the "[RFID] Tag:" line in Serial Monitor.
+// Example: #define MASTER_UIDS { "2AD60B05", "AABBCCDD", nullptr }
+#define MASTER_UIDS { nullptr }
