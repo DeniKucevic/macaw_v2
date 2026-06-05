@@ -197,7 +197,8 @@ void pollTask(void* param) {
     if (WiFi.status() != WL_CONNECTED) {
       connectWifi();
     }
-    pollDoorCommands(); // blocks up to 9s waiting for command
+    pollDoorCommands(); // blocks up to 5s waiting for command
+    vTaskDelay(pdMS_TO_TICKS(2000)); // 2s pause — cuts Vercel usage by ~60%
   }
 }
 
