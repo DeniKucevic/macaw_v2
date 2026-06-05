@@ -11,7 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format } from "date-fns";
+const fmt = new Intl.DateTimeFormat("sr-Latn-RS", {
+  timeZone: "Europe/Belgrade",
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 const methodLabel: Record<string, string> = {
   RFID: "RFID",
@@ -64,7 +71,7 @@ export default async function EntriesPage() {
             {entries.map((entry) => (
               <TableRow key={entry.id}>
                 <TableCell className="text-sm font-mono">
-                  {format(entry.enteredAt, "dd.MM, HH:mm")}
+                  {fmt.format(entry.enteredAt)}
                 </TableCell>
                 <TableCell className="font-medium">{entry.user.name}</TableCell>
                 <TableCell>

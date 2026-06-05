@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { DoorOpen, Loader2, CheckCircle2 } from "lucide-react";
 
 type State = "idle" | "loading" | "success" | "error";
@@ -15,6 +22,7 @@ export function DoorOpenButton({
 }) {
   const [state, setState] = useState<State>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [confirm, setConfirm] = useState(false);
 
   useEffect(() => {
     if (state === "success") {
@@ -24,6 +32,7 @@ export function DoorOpenButton({
   }, [state]);
 
   async function handleOpen() {
+    setConfirm(false);
     setState("loading");
     setErrorMsg("");
 
@@ -49,7 +58,7 @@ export function DoorOpenButton({
         size="lg"
         className="h-24 w-48 text-base flex-col gap-2"
         disabled={state === "loading" || state === "success"}
-        onClick={handleOpen}
+        onClick={() => setConfirm(true)}
         variant={state === "success" ? "outline" : "default"}
       >
         {state === "loading" && <Loader2 className="h-6 w-6 animate-spin" />}
@@ -65,6 +74,19 @@ export function DoorOpenButton({
       {state === "error" && (
         <p className="text-sm text-destructive">{errorMsg}</p>
       )}
+
+      <Dialog open={confirm} onOpenChange={setConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Otvoriti vrata?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{deviceName}</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirm(false)}>Otkaži</Button>
+            <Button onClick={handleOpen}>Otvori</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
