@@ -27,8 +27,8 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const int  RELAY_PIN        = 4;
-const bool RELAY_ACTIVE_LOW = true;
-const int  DOOR_OPEN_MS     = 3000;
+const bool RELAY_ACTIVE_LOW = false;
+const int  DOOR_OPEN_MS     = 1000;
 const int  POLL_TIMEOUT_MS  = 9000; // server holds 8s, we allow 9s before retry
 
 // ─── NFC ──────────────────────────────────────────────────────────────────────
@@ -64,7 +64,21 @@ String postJson(const String& path, const String& body) {
 }
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
+void scanWifi() {
+  Serial.println("[WiFi] Scanning...");
+  int n = WiFi.scanNetworks();
+  for (int i = 0; i < n; i++) {
+    Serial.printf("  %ddBm  %s  (%s)\n",
+      WiFi.RSSI(i),
+      WiFi.SSID(i).c_str(),
+      WiFi.encryptionType(i) == WIFI_AUTH_WPA2_ENTERPRISE ? "WPA2-Enterprise" :
+      WiFi.encryptionType(i) == WIFI_AUTH_OPEN            ? "Open" : "WPA/WPA2");
+  }
+  Serial.println("[WiFi] Scan done");
+}
+
 void connectWifi() {
+  scanWifi();
   Serial.printf("[WiFi] Connecting to %s", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {

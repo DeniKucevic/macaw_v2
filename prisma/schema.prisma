@@ -165,14 +165,14 @@ enum MembershipStatus {
 model Entry {
   id           String      @id @default(cuid())
   gymId        String
-  userId       String
+  userId       String?
   membershipId String?
   method       EntryMethod
   enteredAt    DateTime    @default(now())
   notes        String?
 
-  gym        Gym        @relation(fields: [gymId], references: [id])
-  user       User       @relation(fields: [userId], references: [id])
+  gym        Gym         @relation(fields: [gymId], references: [id])
+  user       User?       @relation(fields: [userId], references: [id])
   membership Membership? @relation(fields: [membershipId], references: [id])
 }
 

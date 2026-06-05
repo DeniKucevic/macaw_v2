@@ -68,33 +68,30 @@ export default async function EntriesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {entries.map((entry) => (
-              <TableRow key={entry.id}>
-                <TableCell className="text-sm font-mono">
-                  {fmt.format(entry.enteredAt)}
-                </TableCell>
-                <TableCell className="font-medium">{entry.user.name}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      entry.method === "RFID"
-                        ? "default"
-                        : entry.method === "PHONE"
-                        ? "secondary"
-                        : "outline"
-                    }
-                  >
-                    {methodLabel[entry.method] ?? entry.method}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {entry.membership?.plan.name ?? "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {entry.notes ?? "—"}
-                </TableCell>
-              </TableRow>
-            ))}
+            {entries.map((entry) => {
+              const denied = entry.notes?.startsWith("ODBIJEN:");
+              return (
+                <TableRow key={entry.id} className={denied ? "bg-red-50 dark:bg-red-950/20" : ""}>
+                  <TableCell className="text-sm font-mono">
+                    {fmt.format(entry.enteredAt)}
+                  </TableCell>
+                  <TableCell className="font-medium">{entry.user ? entry.user.name : "Nepoznat"}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={denied ? "destructive" : entry.method === "RFID" ? "default" : entry.method === "PHONE" ? "secondary" : "outline"}
+                    >
+                      {denied ? "Odbijen" : (methodLabel[entry.method] ?? entry.method)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {entry.membership?.plan.name ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {denied ? entry.notes!.replace("ODBIJEN: ", "") : (entry.notes ?? "—")}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
             {entries.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground py-12">

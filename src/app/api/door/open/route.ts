@@ -30,12 +30,13 @@ export async function POST(req: NextRequest) {
   const device = await db.device.findUnique({ where: { id: parsed.data.deviceId } });
   if (!device || device.gymId !== user.gymId) return notFound("Device");
 
-  // OWNER/STAFF bypass membership checks — queue directly, no entry recorded
+  // OWNER/STAFF bypass membership checks — log entry and queue
   if (user.role === Role.OWNER || user.role === Role.STAFF) {
+    await validateAndRecordEntry(user.gymId, user.id, "PHONE", true);
     const doorRequest = await db.doorRequest.create({
       data: {
         deviceId: device.id,
-        userId: null,
+        userId: user.id,
         status: "PENDING",
         expiresAt: addSeconds(new Date(), 30),
       },
@@ -43,8 +44,8 @@ export async function POST(req: NextRequest) {
     return ok({ queued: true, commandId: doorRequest.id });
   }
 
-  // Members: validate membership first (dry run)
-  const check = await validateAndRecordEntry(user.gymId, user.id, "PHONE", false);
+  // Members: validate and record entry
+  const check = await validateAndRecordEntry(user.gymId, user.id, "PHONE", true);
   if (!check.allowed) return err(check.reason, 422);
 
   const doorRequest = await db.doorRequest.create({

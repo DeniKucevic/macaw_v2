@@ -40,6 +40,15 @@ export async function POST(
   });
 
   if (!rfidTag || !rfidTag.isActive) {
+    await db.entry.create({
+      data: {
+        gymId: device.gymId,
+        userId: null,
+        membershipId: null,
+        method: "RFID",
+        notes: `ODBIJEN: Nepoznata kartica (${parsed.data.tagId})`,
+      },
+    });
     return ok({ allowed: false, reason: "Unknown or inactive tag" });
   }
 
@@ -53,6 +62,18 @@ export async function POST(
     "RFID",
     true
   );
+
+  if (!result.allowed) {
+    await db.entry.create({
+      data: {
+        gymId: device.gymId,
+        userId: rfidTag.userId,
+        membershipId: null,
+        method: "RFID",
+        notes: `ODBIJEN: ${result.reason}`,
+      },
+    });
+  }
 
   return ok({
     ...result,
