@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AddPlanDialog } from "./add-plan-dialog";
+import { DeletePlanButton } from "./delete-plan-button";
 
 export default async function PlansPage() {
   const session = await getSession();
@@ -49,6 +50,7 @@ export default async function PlansPage() {
               <TableHead>Maks./Dan</TableHead>
               <TableHead>Članovi</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -79,6 +81,9 @@ export default async function PlansPage() {
                   <Badge variant={plan.isActive ? "default" : "secondary"}>
                     {plan.isActive ? "Aktivan" : "Neaktivan"}
                   </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <DeletePlanButton planId={plan.id} membershipCount={plan._count.memberships} />
                 </TableCell>
               </TableRow>
             ))}

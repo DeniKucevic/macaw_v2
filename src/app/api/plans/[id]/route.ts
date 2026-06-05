@@ -51,14 +51,18 @@ export async function DELETE(
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (!user || user.role !== Role.OWNER) return forbidden();
 
-  const plan = await db.membershipPlan.findUnique({ where: { id } });
+  const plan = await db.membershipPlan.findUnique({
+    where: { id },
+    include: { _count: { select: { memberships: true } } },
+  });
   if (!plan || plan.gymId !== user.gymId) return notFound("Plan");
 
-  // Soft delete - just deactivate
-  const updated = await db.membershipPlan.update({
-    where: { id },
-    data: { isActive: false },
-  });
+  if (plan._count.memberships === 0) {
+    await db.membershipPlan.delete({ where: { id } });
+    return ok({ deleted: true });
+  }
 
-  return ok(updated);
+  // Has memberships — deactivate instead of deleting
+  await db.membershipPlan.update({ where: { id }, data: { isActive: false } });
+  return ok({ deleted: false, deactivated: true });
 }

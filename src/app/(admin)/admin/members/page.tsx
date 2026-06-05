@@ -15,8 +15,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AddMemberDialog } from "./add-member-dialog";
-import { format } from "date-fns";
 import { MembershipStatus } from "@/generated/prisma/client";
+
+const fmt = new Intl.DateTimeFormat("sr-Latn-RS", {
+  timeZone: "Europe/Belgrade",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+const fmtShort = new Intl.DateTimeFormat("sr-Latn-RS", {
+  timeZone: "Europe/Belgrade",
+  day: "2-digit",
+  month: "2-digit",
+});
 
 const roleLabel: Record<string, string> = {
   OWNER: "Vlasnik",
@@ -70,6 +82,17 @@ export default async function MembersPage({
     where: { gymId: user.gymId, role: { in: ["STAFF", "OWNER"] } },
   });
 
+  const in7Days = new Date();
+  in7Days.setDate(in7Days.getDate() + 7);
+  const expiringCount = await db.membership.count({
+    where: {
+      gymId: user.gymId,
+      status: MembershipStatus.ACTIVE,
+      plan: { type: "TIME_BASED" },
+      expiresAt: { gte: new Date(), lte: in7Days },
+    },
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -82,7 +105,7 @@ export default async function MembersPage({
         <AddMemberDialog />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Ukupno članova</CardTitle>
@@ -100,6 +123,14 @@ export default async function MembersPage({
             <CardTitle className="text-sm font-medium text-muted-foreground">Osoblje</CardTitle>
           </CardHeader>
           <CardContent><p className="text-3xl font-bold">{staffCount}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Ističe uskoro</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-3xl font-bold ${expiringCount > 0 ? "text-orange-500" : ""}`}>{expiringCount}</p>
+          </CardContent>
         </Card>
       </div>
 
@@ -147,18 +178,22 @@ export default async function MembersPage({
                             ({(activeMembership.sessionsTotal ?? 0) - (activeMembership.sessionsUsed ?? 0)} preostalo)
                           </span>
                         )}
-                        {activeMembership.plan.type === "TIME_BASED" && activeMembership.expiresAt && (
-                          <span className="text-muted-foreground ml-1">
-                            (ist. {format(activeMembership.expiresAt, "dd.MM")})
-                          </span>
-                        )}
+                        {activeMembership.plan.type === "TIME_BASED" && activeMembership.expiresAt && (() => {
+                          const daysLeft = Math.ceil((activeMembership.expiresAt.getTime() - Date.now()) / 86400000);
+                          const soon = daysLeft <= 7;
+                          return (
+                            <span className={soon ? "text-orange-500 font-medium ml-1" : "text-muted-foreground ml-1"}>
+                              (ist. {fmtShort.format(activeMembership.expiresAt)}{soon ? ` · ${daysLeft}d` : ""})
+                            </span>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <Badge variant="outline" className="text-muted-foreground">Bez članarine</Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {format(member.createdAt, "dd.MM.yyyy")}
+                    {fmt.format(member.createdAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" asChild>
