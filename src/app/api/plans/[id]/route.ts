@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { ok, err, unauthorized, forbidden, notFound } from "@/lib/api-helpers";
 import { Role } from "@/generated/prisma/client";
+import { logAudit } from "@/lib/audit";
 
 const UpdatePlanSchema = z.object({
   name: z.string().min(1).optional(),
@@ -59,10 +60,28 @@ export async function DELETE(
 
   if (plan._count.memberships === 0) {
     await db.membershipPlan.delete({ where: { id } });
+    await logAudit({
+      gymId: user.gymId,
+      actorId: user.id,
+      actorName: user.name,
+      action: "PLAN_DELETED",
+      targetType: "Plan",
+      targetId: id,
+      targetLabel: plan.name,
+    });
     return ok({ deleted: true });
   }
 
   // Has memberships — deactivate instead of deleting
   await db.membershipPlan.update({ where: { id }, data: { isActive: false } });
+  await logAudit({
+    gymId: user.gymId,
+    actorId: user.id,
+    actorName: user.name,
+    action: "PLAN_DEACTIVATED",
+    targetType: "Plan",
+    targetId: id,
+    targetLabel: plan.name,
+  });
   return ok({ deleted: false, deactivated: true });
 }

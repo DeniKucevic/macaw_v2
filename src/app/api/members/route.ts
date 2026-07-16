@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { ok, err, unauthorized, forbidden } from "@/lib/api-helpers";
 import { Role } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
+import { logAudit } from "@/lib/audit";
 
 const CreateMemberSchema = z.object({
   name: z.string().min(1),
@@ -95,6 +96,17 @@ export async function POST(req: NextRequest) {
     });
 
     return user;
+  });
+
+  await logAudit({
+    gymId: owner.gymId,
+    actorId: owner.id,
+    actorName: owner.name,
+    action: "MEMBER_CREATED",
+    targetType: "User",
+    targetId: newUser.id,
+    targetLabel: newUser.name,
+    details: { email: newUser.email, role: newUser.role },
   });
 
   return ok(newUser, 201);

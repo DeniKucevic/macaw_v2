@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { ok, err, unauthorized, forbidden, notFound } from "@/lib/api-helpers";
 import { Role } from "@/generated/prisma/client";
 import { addDays } from "date-fns";
+import { logAudit } from "@/lib/audit";
 
 const CreateMembershipSchema = z.object({
   userId: z.string(),
@@ -91,6 +92,17 @@ export async function POST(req: NextRequest) {
       status: "ACTIVE",
     },
     include: { plan: true, user: { select: { id: true, name: true, email: true } } },
+  });
+
+  await logAudit({
+    gymId: staff.gymId,
+    actorId: staff.id,
+    actorName: staff.name,
+    action: "MEMBERSHIP_ASSIGNED",
+    targetType: "Membership",
+    targetId: membership.id,
+    targetLabel: targetUser.name,
+    details: { plan: plan.name },
   });
 
   return ok(membership, 201);

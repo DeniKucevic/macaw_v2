@@ -19,6 +19,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { ok, err, unauthorized } from "@/lib/api-helpers";
+import { logAudit } from "@/lib/audit";
 
 const PollSchema = z.object({ secret: z.string().min(1) });
 
@@ -41,8 +42,9 @@ export async function POST(
   // Throttled heartbeat: only touch the DB if we haven't seen this device in
   // HEARTBEAT_MS or it was marked offline. Piggy-back the stale-command cleanup
   // here so it also runs ~once/minute instead of on every poll.
+  const wasOffline = !device.isOnline;
   const lastSeen = device.lastSeenAt?.getTime() ?? 0;
-  if (!device.isOnline || now.getTime() - lastSeen >= HEARTBEAT_MS) {
+  if (wasOffline || now.getTime() - lastSeen >= HEARTBEAT_MS) {
     await db.device.update({
       where: { id: deviceId },
       data: { lastSeenAt: now, isOnline: true },
@@ -51,6 +53,15 @@ export async function POST(
       where: { deviceId, status: "PENDING", expiresAt: { lt: now } },
       data: { status: "EXPIRED" },
     });
+    if (wasOffline) {
+      await logAudit({
+        gymId: device.gymId,
+        action: "DEVICE_ONLINE",
+        targetType: "Device",
+        targetId: deviceId,
+        targetLabel: device.name,
+      });
+    }
   }
 
   // Single check — return whatever's pending right now, then let the function exit.

@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dumbbell, Users, CreditCard, LogIn, Settings, BarChart3, Cpu, Lock } from "lucide-react";
+import { Dumbbell, Users, CreditCard, LogIn, Settings, BarChart3, Cpu, Lock, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavProps {
@@ -31,6 +31,7 @@ export function Nav({ role }: NavProps) {
     { href: "/admin/plans", label: "Planovi", icon: CreditCard },
     { href: "/admin/entries", label: "Evidencija", icon: BarChart3 },
     { href: "/admin/devices", label: "Uređaji", icon: Cpu },
+    { href: "/admin/audit", label: "Dnevnik", icon: ScrollText },
     { href: "/admin/settings", label: "Podešavanja", icon: Settings },
   ];
 

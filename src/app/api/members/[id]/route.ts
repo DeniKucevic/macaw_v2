@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { ok, err, unauthorized, forbidden, notFound } from "@/lib/api-helpers";
 import { Role } from "@/generated/prisma/client";
+import { logAudit } from "@/lib/audit";
 
 const UpdateMemberSchema = z.object({
   name: z.string().min(1).optional(),
@@ -90,6 +91,18 @@ export async function PUT(
     },
   });
 
+  const roleChanged = !!parsed.data.role && parsed.data.role !== target.role;
+  await logAudit({
+    gymId: staff.gymId,
+    actorId: staff.id,
+    actorName: staff.name,
+    action: roleChanged ? "MEMBER_ROLE_CHANGED" : "MEMBER_UPDATED",
+    targetType: "User",
+    targetId: id,
+    targetLabel: updated.name,
+    details: roleChanged ? { from: target.role, to: parsed.data.role } : { ...parsed.data },
+  });
+
   return ok(updated);
 }
 
@@ -109,5 +122,15 @@ export async function DELETE(
   if (target.role === Role.OWNER) return err("Cannot delete the owner", 400);
 
   await db.user.delete({ where: { id } });
+  await logAudit({
+    gymId: caller.gymId,
+    actorId: caller.id,
+    actorName: caller.name,
+    action: "MEMBER_DELETED",
+    targetType: "User",
+    targetId: id,
+    targetLabel: target.name,
+    details: { email: target.email, role: target.role },
+  });
   return ok({ deleted: true });
 }

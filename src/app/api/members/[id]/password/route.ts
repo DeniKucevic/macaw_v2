@@ -11,6 +11,7 @@ import { getSession } from "@/lib/session";
 import { ok, err, unauthorized, forbidden, notFound } from "@/lib/api-helpers";
 import { Role } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
+import { logAudit } from "@/lib/audit";
 
 const ResetSchema = z.object({ password: z.string().min(6) });
 
@@ -43,6 +44,16 @@ export async function POST(
   await db.account.update({
     where: { id: credential.id },
     data: { password: passwordHash },
+  });
+
+  await logAudit({
+    gymId: caller.gymId,
+    actorId: caller.id,
+    actorName: caller.name,
+    action: "PASSWORD_RESET",
+    targetType: "User",
+    targetId: id,
+    targetLabel: target.name,
   });
 
   return ok({ success: true });

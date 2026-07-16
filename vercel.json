@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/expire-memberships",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/device-check",
+      "schedule": "0 3 * * *"
     }
   ]
 }

@@ -23,6 +23,25 @@ model Gym {
   memberships  Membership[]
   entries      Entry[]
   devices      Device[]
+  auditLogs    AuditLog[]
+}
+
+// Admin/system audit trail: who did what, plus device-offline events.
+model AuditLog {
+  id          String   @id @default(cuid())
+  gymId       String
+  actorId     String? // null = system/cron
+  actorName   String? // denormalized so the log survives user deletion
+  action      String // e.g. MEMBER_ROLE_CHANGED, PASSWORD_RESET, DEVICE_OFFLINE
+  targetType  String? // "User" | "Membership" | "Plan" | "Device"
+  targetId    String?
+  targetLabel String? // human label, e.g. member or device name
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  gym Gym @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  @@index([gymId, createdAt])
 }
 
 // ─── Auth (Better Auth compatible) ───────────────────────────────────────────
