@@ -7,6 +7,14 @@ export const auth = betterAuth({
   database: prismaAdapter(db, {
     provider: "postgresql",
   }),
+  // Origins allowed to make authenticated (CSRF-checked) requests. Includes the
+  // production domain, the www + vercel.app fallbacks, and localhost for dev.
+  trustedOrigins: [
+    "http://localhost:3000",
+    "https://macaw-v2.vercel.app",
+    "https://fitnessm.rs",
+    "https://www.fitnessm.rs",
+  ],
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
