@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dumbbell, Users, CreditCard, LogIn, Settings, BarChart3, Cpu, DoorOpen } from "lucide-react";
+import { Dumbbell, Users, CreditCard, LogIn, Settings, BarChart3, Cpu, DoorOpen, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavProps {
@@ -106,6 +106,11 @@ export function Nav({ role }: NavProps) {
                 </Link>
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem asChild>
+              <Link href="/nalog">
+                <Lock className="h-4 w-4 mr-2" /> Promeni lozinku
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
               <LogIn className="h-4 w-4 mr-2" /> Odjavi se
             </DropdownMenuItem>

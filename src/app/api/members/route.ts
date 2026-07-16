@@ -5,7 +5,6 @@ import { getSession } from "@/lib/session";
 import { ok, err, unauthorized, forbidden } from "@/lib/api-helpers";
 import { Role } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
-import { generateUniquePin } from "@/lib/pin";
 
 const CreateMemberSchema = z.object({
   name: z.string().min(1),
@@ -65,7 +64,6 @@ export async function POST(req: NextRequest) {
   if (existing) return err("A user with this email already exists", 409);
 
   const passwordHash = await bcrypt.hash(password, 12);
-  const pin = await generateUniquePin(owner.gymId);
 
   const newUser = await db.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -76,7 +74,6 @@ export async function POST(req: NextRequest) {
         role,
         gymId: owner.gymId,
         emailVerified: false,
-        pin,
       },
       select: {
         id: true,
@@ -100,5 +97,5 @@ export async function POST(req: NextRequest) {
     return user;
   });
 
-  return ok({ ...newUser, pin }, 201);
+  return ok(newUser, 201);
 }

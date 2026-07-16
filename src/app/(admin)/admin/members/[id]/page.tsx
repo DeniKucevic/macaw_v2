@@ -15,8 +15,8 @@ import { format } from "date-fns";
 import { AssignMembershipDialog } from "./assign-membership-dialog";
 import { ManualEntryButton } from "./manual-entry-button";
 import { EditMembershipDialog } from "./edit-membership-dialog";
-import { PinSection } from "./pin-section";
 import { RfidSection } from "./rfid-section";
+import { ResetPasswordButton } from "./reset-password-button";
 import { MembershipStatus } from "@/generated/prisma/client";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -147,8 +147,8 @@ export default async function MemberDetailPage({
       {/* RFID kartice */}
       <RfidSection memberId={member.id} initialTags={member.rfidTags} />
 
-      {/* PIN kod */}
-      <PinSection memberId={member.id} pin={member.pin} />
+      {/* Lozinka */}
+      <ResetPasswordButton memberId={member.id} memberName={member.name} />
 
       {/* Istorija ulazaka */}
       <Card>
