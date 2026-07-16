@@ -95,7 +95,7 @@ export async function validateAndRecordEntry(
   });
 
   if (!membership) {
-    return { allowed: false, reason: "No active membership" };
+    return { allowed: false, reason: "Nema aktivne članarine" };
   }
 
   // Check time-based expiry
@@ -107,7 +107,7 @@ export async function validateAndRecordEntry(
           data: { status: MembershipStatus.EXPIRED },
         });
       }
-      return { allowed: false, reason: "Membership has expired" };
+      return { allowed: false, reason: "Članarina je istekla" };
     }
   }
 
@@ -122,7 +122,7 @@ export async function validateAndRecordEntry(
           data: { status: MembershipStatus.EXPIRED },
         });
       }
-      return { allowed: false, reason: "No sessions remaining" };
+      return { allowed: false, reason: "Nema preostalih treninga" };
     }
   }
 
@@ -141,7 +141,7 @@ export async function validateAndRecordEntry(
   });
 
   if (todayEntries >= maxPerDay) {
-    return { allowed: false, reason: "Already entered today" };
+    return { allowed: false, reason: "Već ste ušli danas" };
   }
 
   // All good — record if commit
