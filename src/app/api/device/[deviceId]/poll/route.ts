@@ -1,18 +1,19 @@
 /**
- * Long-polling endpoint for ESP32.
- * Holds the connection open up to HOLD_MS waiting for a pending door command.
- * Returns immediately when one is found, or { command: null } on timeout.
+ * Short-poll endpoint for ESP32.
+ * Checks once for a pending door command and returns immediately — it does NOT
+ * hold the connection open. The device re-polls on its own ~2s timer, so keeping
+ * the serverless function alive to "wait" would just burn Fluid provisioned
+ * memory (billed on wall-clock alive time) for no benefit. Worst-case door
+ * latency is one device poll interval (~2s), well within a command's 30s TTL.
  *
  * Response contract (must stay stable — the firmware reads `command.id`):
  *   { "command": { "id": string, "createdAt": string } }  // command ready
  *   { "command": null }                                     // nothing pending
  *
- * The device polls ~24/7, so this path is deliberately lean:
+ * Kept lean because the device polls ~24/7:
  *  - the "last seen" heartbeat + stale-command cleanup only run once per
- *    HEARTBEAT_MS, not on every poll (kills ~9/10 of the writes);
- *  - the pending-command check filters expired rows in-query, so we don't need
- *    to expire them on the hot path;
- *  - the in-hold poll runs every TICK_MS (1s) — plenty responsive for a door.
+ *    HEARTBEAT_MS, not on every poll;
+ *  - the pending-command check filters expired rows in-query.
  */
 import { NextRequest } from "next/server";
 import { z } from "zod";
@@ -21,16 +22,7 @@ import { ok, err, unauthorized } from "@/lib/api-helpers";
 
 const PollSchema = z.object({ secret: z.string().min(1) });
 
-const HOLD_MS      = 5000;  // hold connection up to 5s (Vercel free = 10s max, need margin)
-const TICK_MS      = 1000;  // check DB every 1s during the hold
 const HEARTBEAT_MS = 60000; // only refresh lastSeenAt / expire commands this often
-
-async function findPending(deviceId: string) {
-  return db.doorRequest.findFirst({
-    where: { deviceId, status: "PENDING", expiresAt: { gte: new Date() } },
-    orderBy: { createdAt: "asc" },
-  });
-}
 
 export async function POST(
   req: NextRequest,
@@ -61,16 +53,15 @@ export async function POST(
     });
   }
 
-  // Long poll — check now, then every TICK_MS until the hold expires.
-  const deadline = Date.now() + HOLD_MS;
-  for (;;) {
-    const command = await findPending(deviceId);
-    if (command) {
-      return ok({ command: { id: command.id, createdAt: command.createdAt } });
-    }
-    if (Date.now() + TICK_MS >= deadline) break;
-    await new Promise((r) => setTimeout(r, TICK_MS));
-  }
+  // Single check — return whatever's pending right now, then let the function exit.
+  const command = await db.doorRequest.findFirst({
+    where: { deviceId, status: "PENDING", expiresAt: { gte: now } },
+    orderBy: { createdAt: "asc" },
+  });
 
-  return ok({ command: null });
+  return ok(
+    command
+      ? { command: { id: command.id, createdAt: command.createdAt } }
+      : { command: null }
+  );
 }
