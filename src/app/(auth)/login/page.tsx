@@ -30,7 +30,9 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/dashboard");
+    // Route by role — the root page sends OWNER/STAFF to the admin panel and
+    // members to the dashboard, matching the logo/home behavior.
+    router.push("/");
     router.refresh();
   }
 
