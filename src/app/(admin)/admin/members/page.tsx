@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -15,7 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AddMemberDialog } from "./add-member-dialog";
+import { MembersControls } from "./members-controls";
 import { MembershipStatus } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 
 const fmt = new Intl.DateTimeFormat("sr-Latn-RS", {
   timeZone: "Europe/Belgrade",
@@ -39,7 +40,7 @@ const roleLabel: Record<string, string> = {
 export default async function MembersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; sort?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -47,8 +48,17 @@ export default async function MembersPage({
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (!user) redirect("/login");
 
-  const { q } = await searchParams;
+  const { q, sort } = await searchParams;
   const search = q?.trim() ?? "";
+
+  // name / newest / oldest sort in the DB; "expiry" is sorted in JS below
+  // because it depends on the (filtered, take-1) active membership relation.
+  const orderBy: Prisma.UserOrderByWithRelationInput =
+    sort === "name"
+      ? { name: "asc" }
+      : sort === "oldest"
+        ? { createdAt: "asc" }
+        : { createdAt: "desc" };
 
   const members = await db.user.findMany({
     where: {
@@ -71,8 +81,17 @@ export default async function MembersPage({
         take: 1,
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy,
   });
+
+  if (sort === "expiry") {
+    // Soonest-expiring first; members without a dated membership go last.
+    members.sort((a, b) => {
+      const ea = a.memberships[0]?.expiresAt?.getTime() ?? Infinity;
+      const eb = b.memberships[0]?.expiresAt?.getTime() ?? Infinity;
+      return ea - eb;
+    });
+  }
 
   const allCount = await db.user.count({ where: { gymId: user.gymId } });
   const activeCount = await db.membership.count({
@@ -136,14 +155,7 @@ export default async function MembersPage({
 
       <Card>
         <div className="p-4 border-b">
-          <form method="GET">
-            <Input
-              name="q"
-              defaultValue={search}
-              placeholder="Pretraži po imenu, emailu ili telefonu…"
-              className="max-w-sm"
-            />
-          </form>
+          <MembersControls />
         </div>
 
         <Table>

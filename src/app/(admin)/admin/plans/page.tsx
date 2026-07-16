@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { AddPlanDialog } from "./add-plan-dialog";
 import { DeletePlanButton } from "./delete-plan-button";
+import { MembershipStatus } from "@/generated/prisma/client";
 
 export default async function PlansPage() {
   const session = await getSession();
@@ -21,13 +22,34 @@ export default async function PlansPage() {
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (!user) redirect("/login");
 
+  const now = new Date();
   const plans = await db.membershipPlan.findMany({
     where: { gymId: user.gymId },
     include: {
-      _count: { select: { memberships: true } },
+      // "Članovi" = truly active: status ACTIVE and not past its expiry
+      // (time-based plans have expiresAt; session-based have it null).
+      _count: {
+        select: {
+          memberships: {
+            where: {
+              status: MembershipStatus.ACTIVE,
+              OR: [{ expiresAt: null }, { expiresAt: { gte: now } }],
+            },
+          },
+        },
+      },
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
+
+  // Total memberships per plan (any status) — used for delete-vs-deactivate
+  // messaging, since expired/suspended rows still block a hard delete (FK).
+  const totals = await db.membership.groupBy({
+    by: ["planId"],
+    where: { gymId: user.gymId },
+    _count: { _all: true },
+  });
+  const totalByPlan = new Map(totals.map((t) => [t.planId, t._count._all]));
 
   return (
     <div className="space-y-6">
@@ -83,7 +105,7 @@ export default async function PlansPage() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <DeletePlanButton planId={plan.id} membershipCount={plan._count.memberships} />
+                  <DeletePlanButton planId={plan.id} membershipCount={totalByPlan.get(plan.id) ?? 0} />
                 </TableCell>
               </TableRow>
             ))}

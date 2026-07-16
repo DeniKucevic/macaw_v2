@@ -11,6 +11,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EntriesControls } from "./entries-controls";
+import { EntryMethod } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
+
 const fmt = new Intl.DateTimeFormat("sr-Latn-RS", {
   timeZone: "Europe/Belgrade",
   day: "2-digit",
@@ -26,15 +30,43 @@ const methodLabel: Record<string, string> = {
   MANUAL: "Ručni",
 };
 
-export default async function EntriesPage() {
+export default async function EntriesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; period?: string; method?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect("/login");
 
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (!user) redirect("/login");
 
+  const { q, period = "7d", method = "all" } = await searchParams;
+  const search = q?.trim() ?? "";
+
+  const now = new Date();
+  const where: Prisma.EntryWhereInput = { gymId: user.gymId };
+
+  if (period === "today") {
+    where.enteredAt = { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
+  } else if (period === "7d") {
+    where.enteredAt = { gte: new Date(now.getTime() - 7 * 86400000) };
+  } else if (period === "30d") {
+    where.enteredAt = { gte: new Date(now.getTime() - 30 * 86400000) };
+  }
+
+  if (method === "denied") {
+    where.notes = { startsWith: "ODBIJEN:" };
+  } else if (method !== "all") {
+    where.method = method as EntryMethod;
+  }
+
+  if (search) {
+    where.user = { name: { contains: search, mode: "insensitive" } };
+  }
+
   const entries = await db.entry.findMany({
-    where: { gymId: user.gymId },
+    where,
     include: {
       user: { select: { id: true, name: true } },
       membership: { include: { plan: true } },
@@ -43,8 +75,7 @@ export default async function EntriesPage() {
     take: 100,
   });
 
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEntries = entries.filter((e) => e.enteredAt >= todayStart);
 
   return (
@@ -52,9 +83,11 @@ export default async function EntriesPage() {
       <div>
         <h1 className="text-2xl font-bold">Evidencija ulazaka</h1>
         <p className="text-muted-foreground text-sm">
-          {todayEntries.length} ulazaka danas · {entries.length} prikazano ukupno
+          {todayEntries.length} ulazaka danas · {entries.length} prikazano
         </p>
       </div>
+
+      <EntriesControls />
 
       <Card>
         <Table>
