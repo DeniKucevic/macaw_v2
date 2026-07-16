@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format, formatDistanceToNow } from "date-fns";
 import { MembershipStatus } from "@/generated/prisma/client";
-import { Calendar, Dumbbell, Clock, KeyRound } from "lucide-react";
+import { Calendar, Dumbbell, Clock } from "lucide-react";
+import { DoorOpenButton } from "../door/door-open-button";
 
 const methodLabel: Record<string, string> = {
   RFID: "RFID",
@@ -36,6 +37,11 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
+  const devices = await db.device.findMany({
+    where: { gymId: user.gymId },
+    orderBy: { name: "asc" },
+  });
+
   const membership = user.memberships[0] ?? null;
   const lastEntry = user.entries[0] ?? null;
 
@@ -45,6 +51,26 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold">Zdravo, {user.name.split(" ")[0]} 👋</h1>
         <p className="text-muted-foreground text-sm">Status vaše članarine</p>
       </div>
+
+      {/* Otvori vrata */}
+      {devices.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Otvori vrata</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-8 justify-center py-2">
+              {devices.map((device) => (
+                <DoorOpenButton
+                  key={device.id}
+                  deviceId={device.id}
+                  deviceName={device.name}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status članarine */}
       {membership ? (
@@ -102,24 +128,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* PIN kod */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <KeyRound className="h-4 w-4" /> PIN kod za vrata
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {user.pin ? (
-            <p className="text-4xl font-mono font-bold tracking-widest">{user.pin}</p>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              Nemate dodeljen PIN. Kontaktirajte recepciju.
-            </p>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Poslednja poseta */}
       <Card>

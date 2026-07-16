@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dumbbell, Users, CreditCard, LogIn, Settings, BarChart3, Cpu, DoorOpen, Lock } from "lucide-react";
+import { Dumbbell, Users, CreditCard, LogIn, Settings, BarChart3, Cpu, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavProps {
@@ -37,7 +37,6 @@ export function Nav({ role }: NavProps) {
   const clientLinks = [
     { href: "/dashboard", label: "Početna", icon: Dumbbell },
     { href: "/history", label: "Istorija", icon: BarChart3 },
-    { href: "/door", label: "Otvori vrata", icon: DoorOpen },
   ];
 
   const links = isAdmin ? adminLinks : clientLinks;
