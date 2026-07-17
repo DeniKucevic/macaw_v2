@@ -37,9 +37,22 @@ export async function GET(req: NextRequest) {
       AND "sessionsUsed" >= "sessionsTotal"
   `;
 
+  // Log retention: bound growth regardless of a misbehaving device.
+  // DeviceLog is operational telemetry (ephemeral) — keep 30 days.
+  // AuditLog is the security trail — keep 1 year.
+  const DAY = 24 * 60 * 60 * 1000;
+  const deviceLogsPruned = await db.deviceLog.deleteMany({
+    where: { createdAt: { lt: new Date(now.getTime() - 30 * DAY) } },
+  });
+  const auditLogsPruned = await db.auditLog.deleteMany({
+    where: { createdAt: { lt: new Date(now.getTime() - 365 * DAY) } },
+  });
+
   return ok({
     ranAt: now.toISOString(),
     timeExpired: timeExpired.count,
     sessionExhausted,
+    deviceLogsPruned: deviceLogsPruned.count,
+    auditLogsPruned: auditLogsPruned.count,
   });
 }
