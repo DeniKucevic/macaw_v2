@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -58,9 +59,8 @@ export function Nav({ role }: NavProps) {
   return (
     <header className="border-b bg-background sticky top-0 z-50">
       <div className="container mx-auto flex h-14 items-center gap-4 px-4">
-        <Link href={isAdmin ? "/admin/members" : "/dashboard"} className="flex items-center gap-2 font-semibold mr-2">
-          <Dumbbell className="h-5 w-5 text-primary" />
-          <span className="hidden sm:inline">Fitness M</span>
+        <Link href={isAdmin ? "/admin/members" : "/dashboard"} className="flex items-center mr-2">
+          <Image src="/logo.png" alt="Fitness M" width={44} height={39} className="h-9 w-auto" priority />
         </Link>
 
         <nav className="flex items-center gap-1 flex-1">
