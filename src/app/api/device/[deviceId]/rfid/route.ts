@@ -33,6 +33,17 @@ export async function POST(
     data: { lastSeenAt: new Date(), isOnline: true },
   });
 
+  // Record the scan so the admin UI can capture the UID during enrollment.
+  await db.deviceLog.create({
+    data: {
+      deviceId,
+      gymId: device.gymId,
+      level: "SCAN",
+      message: `Kartica skenirana: ${parsed.data.tagId}`,
+      tagId: parsed.data.tagId,
+    },
+  });
+
   // Look up RFID tag
   const rfidTag = await db.rfidTag.findUnique({
     where: { tagId: parsed.data.tagId },

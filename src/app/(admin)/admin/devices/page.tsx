@@ -27,6 +27,29 @@ export default async function DevicesPage() {
     orderBy: { createdAt: "desc" },
   });
 
+  const logs = await db.deviceLog.findMany({
+    where: { gymId: user.gymId },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: { device: { select: { name: true } } },
+  });
+
+  const logFmt = new Intl.DateTimeFormat("sr-Latn-RS", {
+    timeZone: "Europe/Belgrade",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  const levelVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+    ERROR: "destructive",
+    SCAN: "secondary",
+    INFO: "outline",
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -83,10 +106,49 @@ export default async function DevicesPage() {
         </Table>
       </Card>
 
+      {/* Dnevnik uređaja (telemetrija sa ESP32) */}
+      <div>
+        <h2 className="text-lg font-semibold mb-2">Dnevnik uređaja</h2>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-40">Vreme</TableHead>
+                <TableHead>Uređaj</TableHead>
+                <TableHead>Nivo</TableHead>
+                <TableHead>Poruka</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell className="text-xs font-mono whitespace-nowrap">
+                    {logFmt.format(log.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-sm">{log.device.name}</TableCell>
+                  <TableCell>
+                    <Badge variant={levelVariant[log.level] ?? "outline"}>{log.level}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{log.message}</TableCell>
+                </TableRow>
+              ))}
+              {logs.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-10">
+                    Još nema telemetrije. Uređaj šalje logove na /api/device/[deviceId]/log.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
+      </div>
+
       <div className="text-sm text-muted-foreground bg-muted rounded-lg p-4 space-y-2">
         <p className="font-medium">Vodič za integraciju ESP32</p>
-        <p>Uređaj poluje na <code className="bg-background px-1 rounded">POST /api/device/[deviceId]/poll</code> za komande otvaranja (long polling, do 8s).</p>
+        <p>Uređaj poluje na <code className="bg-background px-1 rounded">POST /api/device/[deviceId]/poll</code> za komande otvaranja (kratki poll, odgovara odmah).</p>
         <p>Za RFID skeniranja, POST na <code className="bg-background px-1 rounded">/api/device/[deviceId]/rfid</code> sa <code className="bg-background px-1 rounded">{"{ tagId, secret }"}</code>.</p>
+        <p>Telemetrija/dijagnostika: POST na <code className="bg-background px-1 rounded">/api/device/[deviceId]/log</code> sa <code className="bg-background px-1 rounded">{"{ secret, level, message, tagId? }"}</code> (level: INFO | ERROR | SCAN). ERROR ide i na Discord.</p>
         <p>Nakon otvaranja vrata, potvrdi na <code className="bg-background px-1 rounded">/api/device/[deviceId]/confirm</code> sa <code className="bg-background px-1 rounded">{"{ commandId, secret }"}</code>.</p>
       </div>
     </div>

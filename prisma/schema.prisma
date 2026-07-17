@@ -227,6 +227,23 @@ model Device {
 
   gym          Gym           @relation(fields: [gymId], references: [id])
   doorRequests DoorRequest[]
+  logs         DeviceLog[]
+}
+
+// Telemetry streamed from the ESP32: boot/PN532 status, errors, and card scans.
+// SCAN rows (with tagId) also drive card enrollment in the admin UI.
+model DeviceLog {
+  id        String   @id @default(cuid())
+  deviceId  String
+  gymId     String
+  level     String // INFO | ERROR | SCAN
+  message   String
+  tagId     String? // set for SCAN events
+  createdAt DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, createdAt])
 }
 
 // ─── Door Commands (queued for ESP32 to poll) ─────────────────────────────────

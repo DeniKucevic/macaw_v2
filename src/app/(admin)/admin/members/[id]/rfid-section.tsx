@@ -18,9 +18,10 @@ interface RfidTag {
 interface Props {
   memberId: string;
   initialTags: RfidTag[];
+  deviceId?: string | null;
 }
 
-export function RfidSection({ memberId, initialTags }: Props) {
+export function RfidSection({ memberId, initialTags, deviceId }: Props) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [tagId, setTagId] = useState("");
@@ -28,6 +29,38 @@ export function RfidSection({ memberId, initialTags }: Props) {
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState("");
+
+  async function handleScan() {
+    if (!deviceId) return;
+    setError("");
+    setScanMsg("Prislonite karticu na čitač…");
+    setScanning(true);
+    const since = new Date().toISOString();
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        const res = await fetch(
+          `/api/device/${deviceId}/last-scan?since=${encodeURIComponent(since)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.tagId) {
+            setTagId(String(data.tagId));
+            setScanMsg("Kartica očitana!");
+            setScanning(false);
+            return;
+          }
+        }
+      } catch {
+        // keep polling
+      }
+    }
+    setScanMsg("Kartica nije očitana. Pokušajte ponovo ili unesite ručno.");
+    setScanning(false);
+  }
 
   async function handleAdd(e: { preventDefault(): void }) {
     e.preventDefault();
@@ -122,6 +155,20 @@ export function RfidSection({ memberId, initialTags }: Props) {
                 className="max-w-36"
               />
             </div>
+            {deviceId && (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleScan}
+                  disabled={scanning}
+                >
+                  {scanning ? "Skeniranje…" : "Skeniraj karticu čitačem"}
+                </Button>
+                {scanMsg && <span className="text-xs text-muted-foreground">{scanMsg}</span>}
+              </div>
+            )}
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex gap-2">
               <Button type="submit" size="sm" disabled={loading}>

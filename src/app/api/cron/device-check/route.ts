@@ -43,8 +43,8 @@ export async function GET(req: NextRequest) {
       details: { lastSeenAt: device.lastSeenAt?.toISOString() ?? null },
     });
     await notify(
-      `⚠️ Uređaj "${device.name}" je van mreže. Poslednji signal: ${
-        device.lastSeenAt?.toISOString() ?? "nepoznato"
+      `⚠️ Device "${device.name}" is offline. Last seen: ${
+        device.lastSeenAt?.toISOString() ?? "unknown"
       }.`
     );
   }

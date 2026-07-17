@@ -80,6 +80,13 @@ export default async function MemberDetailPage({
   // Serialize Decimal → string so it can be passed to Client Components
   const plans = rawPlans.map((p) => ({ ...p, price: p.price.toString() }));
 
+  // Reader used to capture card UIDs during enrollment (gym's first device).
+  const device = await db.device.findFirst({
+    where: { gymId: caller.gymId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -145,7 +152,7 @@ export default async function MemberDetailPage({
       </Card>
 
       {/* RFID kartice */}
-      <RfidSection memberId={member.id} initialTags={member.rfidTags} />
+      <RfidSection memberId={member.id} initialTags={member.rfidTags} deviceId={device?.id ?? null} />
 
       {/* Lozinka */}
       <ResetPasswordButton memberId={member.id} memberName={member.name} />
