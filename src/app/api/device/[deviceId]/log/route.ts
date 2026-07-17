@@ -28,6 +28,22 @@ export async function POST(
   const device = await db.device.findUnique({ where: { id: deviceId } });
   if (!device || device.secret !== parsed.data.secret) return unauthorized();
 
+  // De-dupe alerts: only ping Discord if this exact error wasn't already alerted
+  // from this device in the last 15 min — so a crash-looping device that repeats
+  // the same error doesn't flood the channel. All logs are still stored.
+  let alreadyAlerted = false;
+  if (parsed.data.level === "ERROR") {
+    const prior = await db.deviceLog.findFirst({
+      where: {
+        deviceId,
+        level: "ERROR",
+        message: parsed.data.message,
+        createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+      },
+    });
+    alreadyAlerted = !!prior;
+  }
+
   await db.deviceLog.create({
     data: {
       deviceId,
@@ -38,7 +54,7 @@ export async function POST(
     },
   });
 
-  if (parsed.data.level === "ERROR") {
+  if (parsed.data.level === "ERROR" && !alreadyAlerted) {
     await notify(`🛠️ ${device.name}: ${parsed.data.message}`);
   }
 

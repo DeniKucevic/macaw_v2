@@ -111,8 +111,27 @@ export async function validateAndRecordEntry(
     }
   }
 
-  // Check session-based exhaustion
-  if (membership.plan.type === "SESSION_BASED") {
+  // Grace window: for GRACE_MS after the day's first entry, re-entry is allowed
+  // (e.g. member stepped out to the car). Grace re-entries are logged and marked
+  // but do NOT consume a session or count toward the daily limit. Applies to both
+  // card (RFID) and app (PHONE) since both flow through here.
+  const GRACE_MS = 60 * 60 * 1000; // 1 hour
+  const todayEntries = await db.entry.findMany({
+    where: {
+      gymId,
+      userId,
+      membershipId: membership.id,
+      enteredAt: { gte: startOfDay(now), lte: endOfDay(now) },
+    },
+    orderBy: { enteredAt: "asc" },
+    select: { enteredAt: true },
+  });
+  const firstToday = todayEntries[0]?.enteredAt ?? null;
+  const isGraceReentry =
+    firstToday !== null && now.getTime() - firstToday.getTime() <= GRACE_MS;
+
+  // Session-based exhaustion — a grace re-entry already paid for this visit.
+  if (membership.plan.type === "SESSION_BASED" && !isGraceReentry) {
     const used = membership.sessionsUsed ?? 0;
     const total = membership.sessionsTotal ?? 0;
     if (used >= total) {
@@ -126,22 +145,20 @@ export async function validateAndRecordEntry(
     }
   }
 
-  // Check max entries per day
-  const maxPerDay = membership.maxPerDay ?? membership.plan.maxPerDay;
-  const todayEntries = await db.entry.count({
-    where: {
-      gymId,
-      userId,
-      membershipId: membership.id,
-      enteredAt: {
-        gte: startOfDay(now),
-        lte: endOfDay(now),
-      },
-    },
-  });
-
-  if (todayEntries >= maxPerDay) {
-    return { allowed: false, reason: "Već ste ušli danas" };
+  // Daily limit — counts only "billable" entries (those outside the first-entry
+  // grace window). Grace re-entries bypass the limit entirely.
+  if (!isGraceReentry) {
+    const maxPerDay = membership.maxPerDay ?? membership.plan.maxPerDay;
+    const billableToday =
+      firstToday === null
+        ? 0
+        : 1 +
+          todayEntries.filter(
+            (e) => e.enteredAt.getTime() - firstToday.getTime() > GRACE_MS
+          ).length;
+    if (billableToday >= maxPerDay) {
+      return { allowed: false, reason: "Već ste ušli danas" };
+    }
   }
 
   // All good — record if commit
@@ -154,11 +171,12 @@ export async function validateAndRecordEntry(
           membershipId: membership.id,
           method,
           enteredAt: now,
-          notes,
+          notes: isGraceReentry ? "Ponovni ulazak (u roku)" : notes,
         },
       });
 
-      if (membership.plan.type === "SESSION_BASED") {
+      // Only the first visit consumes a session; grace re-entries are free.
+      if (membership.plan.type === "SESSION_BASED" && !isGraceReentry) {
         await tx.membership.update({
           where: { id: membership.id },
           data: { sessionsUsed: { increment: 1 } },
@@ -169,7 +187,9 @@ export async function validateAndRecordEntry(
 
   const sessionsLeft =
     membership.plan.type === "SESSION_BASED"
-      ? (membership.sessionsTotal ?? 0) - (membership.sessionsUsed ?? 0) - (commit ? 1 : 0)
+      ? (membership.sessionsTotal ?? 0) -
+        (membership.sessionsUsed ?? 0) -
+        (commit && !isGraceReentry ? 1 : 0)
       : null;
 
   return {
