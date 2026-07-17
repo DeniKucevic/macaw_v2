@@ -1,7 +1,7 @@
 {
-  "name": "GymOS",
-  "short_name": "GymOS",
-  "description": "Gym membership management",
+  "name": "Fitness M",
+  "short_name": "Fitness M",
+  "description": "Fitness M — upravljanje članarinama",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
