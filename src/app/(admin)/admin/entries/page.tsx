@@ -95,9 +95,9 @@ export default async function EntriesPage({
             <TableRow>
               <TableHead>Datum i vreme</TableHead>
               <TableHead>Član</TableHead>
-              <TableHead>Metod</TableHead>
-              <TableHead>Plan</TableHead>
-              <TableHead>Napomena</TableHead>
+              <TableHead className="hidden sm:table-cell">Metod</TableHead>
+              <TableHead className="hidden md:table-cell">Plan</TableHead>
+              <TableHead className="hidden lg:table-cell">Napomena</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -109,17 +109,17 @@ export default async function EntriesPage({
                     {fmt.format(entry.enteredAt)}
                   </TableCell>
                   <TableCell className="font-medium">{entry.user ? entry.user.name : "Nepoznat"}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Badge
                       variant={denied ? "destructive" : entry.method === "RFID" ? "default" : entry.method === "PHONE" ? "secondary" : "outline"}
                     >
                       {denied ? "Odbijen" : (methodLabel[entry.method] ?? entry.method)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
+                  <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                     {entry.membership?.plan.name ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
+                  <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
                     {denied ? entry.notes!.replace("ODBIJEN: ", "") : (entry.notes ?? "—")}
                   </TableCell>
                 </TableRow>

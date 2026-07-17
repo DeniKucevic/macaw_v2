@@ -66,11 +66,11 @@ export default async function PlansPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Naziv plana</TableHead>
-              <TableHead>Tip</TableHead>
-              <TableHead>Trajanje / Treninzi</TableHead>
+              <TableHead className="hidden sm:table-cell">Tip</TableHead>
+              <TableHead className="hidden lg:table-cell">Trajanje / Treninzi</TableHead>
               <TableHead>Cena</TableHead>
-              <TableHead>Maks./Dan</TableHead>
-              <TableHead>Članovi</TableHead>
+              <TableHead className="hidden lg:table-cell">Maks./Dan</TableHead>
+              <TableHead className="hidden md:table-cell">Članovi</TableHead>
               <TableHead>Status</TableHead>
               <TableHead />
             </TableRow>
@@ -84,12 +84,12 @@ export default async function PlansPage() {
                     <p className="text-xs text-muted-foreground">{plan.description}</p>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden sm:table-cell">
                   <Badge variant="outline">
                     {plan.type === "TIME_BASED" ? "Vremenski" : "Treninzi"}
                   </Badge>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden lg:table-cell">
                   {plan.type === "TIME_BASED"
                     ? `${plan.durationDays} dana`
                     : `${plan.sessionCount} treninga`}
@@ -97,8 +97,8 @@ export default async function PlansPage() {
                 <TableCell className="font-medium">
                   {String(plan.price)} {plan.currency}
                 </TableCell>
-                <TableCell>{plan.maxPerDay}x</TableCell>
-                <TableCell className="text-muted-foreground">{plan._count.memberships}</TableCell>
+                <TableCell className="hidden lg:table-cell">{plan.maxPerDay}x</TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground">{plan._count.memberships}</TableCell>
                 <TableCell>
                   <Badge variant={plan.isActive ? "default" : "secondary"}>
                     {plan.isActive ? "Aktivan" : "Neaktivan"}

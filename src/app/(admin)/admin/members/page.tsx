@@ -123,7 +123,7 @@ export default async function MembersPage({
         <AddMemberDialog />
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Ukupno članova</CardTitle>
@@ -161,11 +161,11 @@ export default async function MembersPage({
           <TableHeader>
             <TableRow>
               <TableHead>Ime</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Uloga</TableHead>
+              <TableHead className="hidden md:table-cell">Email</TableHead>
+              <TableHead className="hidden sm:table-cell">Uloga</TableHead>
               <TableHead>Članarina</TableHead>
-              <TableHead>Učlanjen</TableHead>
-              <TableHead className="text-right">Akcije</TableHead>
+              <TableHead className="hidden lg:table-cell">Učlanjen</TableHead>
+              <TableHead className="hidden sm:table-cell">Akcije</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -173,9 +173,16 @@ export default async function MembersPage({
               const activeMembership = member.memberships[0];
               return (
                 <TableRow key={member.id}>
-                  <TableCell className="font-medium">{member.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{member.email}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/admin/members/${member.id}`}
+                      className="hover:text-brand transition-colors"
+                    >
+                      {member.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-muted-foreground">{member.email}</TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Badge variant={member.role === "MEMBER" ? "secondary" : "default"}>
                       {roleLabel[member.role] ?? member.role}
                     </Badge>
@@ -203,10 +210,10 @@ export default async function MembersPage({
                       <Badge variant="outline" className="text-muted-foreground">Bez članarine</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
+                  <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
                     {fmt.format(member.createdAt)}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="hidden sm:table-cell">
                     <Link
                       href={`/admin/members/${member.id}`}
                       className="text-sm font-medium text-foreground hover:text-brand transition-colors"

@@ -71,7 +71,7 @@ export function Nav({ role }: NavProps) {
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
                 pathname.startsWith(href)
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-brand/10 text-brand"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent"
               )}
             >

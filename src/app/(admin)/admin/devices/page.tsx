@@ -66,8 +66,8 @@ export default async function DevicesPage() {
             <TableRow>
               <TableHead>Naziv</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Poslednji kontakt</TableHead>
-              <TableHead>Tajni ključ</TableHead>
+              <TableHead className="hidden md:table-cell">Poslednji kontakt</TableHead>
+              <TableHead className="hidden lg:table-cell">Tajni ključ</TableHead>
               <TableHead className="text-right">Otvori</TableHead>
             </TableRow>
           </TableHeader>
@@ -80,12 +80,12 @@ export default async function DevicesPage() {
                     {device.isOnline ? "Online" : "Offline"}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
+                <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                   {device.lastSeenAt
                     ? formatDistanceToNow(device.lastSeenAt, { addSuffix: true })
                     : "Nikad"}
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden lg:table-cell">
                   <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">
                     {device.secret}
                   </code>
@@ -114,7 +114,7 @@ export default async function DevicesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-40">Vreme</TableHead>
-                <TableHead>Uređaj</TableHead>
+                <TableHead className="hidden sm:table-cell">Uređaj</TableHead>
                 <TableHead>Nivo</TableHead>
                 <TableHead>Poruka</TableHead>
               </TableRow>
@@ -125,7 +125,7 @@ export default async function DevicesPage() {
                   <TableCell className="text-xs font-mono whitespace-nowrap">
                     {logFmt.format(log.createdAt)}
                   </TableCell>
-                  <TableCell className="text-sm">{log.device.name}</TableCell>
+                  <TableCell className="hidden sm:table-cell text-sm">{log.device.name}</TableCell>
                   <TableCell>
                     <Badge variant={levelVariant[log.level] ?? "outline"}>{log.level}</Badge>
                   </TableCell>

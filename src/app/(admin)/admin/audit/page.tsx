@@ -64,10 +64,10 @@ export default async function AuditPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Vreme</TableHead>
-              <TableHead>Ko</TableHead>
+              <TableHead className="hidden md:table-cell">Ko</TableHead>
               <TableHead>Radnja</TableHead>
-              <TableHead>Na čemu</TableHead>
-              <TableHead>Detalji</TableHead>
+              <TableHead className="hidden sm:table-cell">Na čemu</TableHead>
+              <TableHead className="hidden lg:table-cell">Detalji</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -78,7 +78,7 @@ export default async function AuditPage() {
                   <TableCell className="text-sm font-mono whitespace-nowrap">
                     {fmt.format(log.createdAt)}
                   </TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell className="hidden md:table-cell text-sm">
                     {log.actorName ?? (isSystem ? "Sistem" : "—")}
                   </TableCell>
                   <TableCell>
@@ -86,10 +86,10 @@ export default async function AuditPage() {
                       {actionLabel[log.action] ?? log.action}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                     {log.targetLabel ?? "—"}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono">
+                  <TableCell className="hidden lg:table-cell text-xs text-muted-foreground font-mono">
                     {log.details ? JSON.stringify(log.details) : "—"}
                   </TableCell>
                 </TableRow>
