@@ -34,7 +34,7 @@ export function AddPlanDialog() {
     durationDays: "30",
     sessionCount: "10",
     price: "",
-    currency: "EUR",
+    currency: "RSD",
     maxPerDay: "1",
   });
 

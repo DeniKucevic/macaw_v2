@@ -127,7 +127,7 @@ model MembershipPlan {
   // SESSION_BASED: total sessions included
   sessionCount Int?
   price        Decimal  @db.Decimal(10, 2)
-  currency     String   @default("EUR")
+  currency     String   @default("RSD")
   // max entries allowed per day (usually 1)
   maxPerDay    Int      @default(1)
   isActive     Boolean  @default(true)

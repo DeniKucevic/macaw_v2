@@ -60,7 +60,7 @@ export function Nav({ role }: NavProps) {
       <div className="container mx-auto flex h-14 items-center gap-4 px-4">
         <Link href={isAdmin ? "/admin/members" : "/dashboard"} className="flex items-center gap-2 font-semibold mr-2">
           <Dumbbell className="h-5 w-5 text-primary" />
-          <span className="hidden sm:inline">Macaw</span>
+          <span className="hidden sm:inline">Fitness M</span>
         </Link>
 
         <nav className="flex items-center gap-1 flex-1">

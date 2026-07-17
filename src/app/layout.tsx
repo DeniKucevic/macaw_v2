@@ -9,13 +9,13 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Macaw",
+  title: "Fitness M",
   description: "Gym membership management",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Macaw",
+    title: "Fitness M",
   },
 };
 

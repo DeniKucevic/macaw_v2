@@ -12,7 +12,7 @@ const CreatePlanSchema = z.object({
   durationDays: z.number().int().positive().optional(),
   sessionCount: z.number().int().positive().optional(),
   price: z.number().nonnegative(),
-  currency: z.string().length(3).default("EUR"),
+  currency: z.string().length(3).default("RSD"),
   maxPerDay: z.number().int().positive().default(1),
   sortOrder: z.number().int().default(0),
 });
