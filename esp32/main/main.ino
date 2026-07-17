@@ -63,6 +63,20 @@ String postJson(const String& path, const String& body) {
   return resp;
 }
 
+// Fire-and-forget telemetry to the server: boot/PN532 status, errors, scans.
+// Shows up in the app under Uređaji → Dnevnik uređaja; ERROR also hits Discord.
+void logToServer(const char* level, const String& message) {
+  if (WiFi.status() != WL_CONNECTED) return;
+  String path = String("/api/device/") + DEVICE_ID + "/log";
+  StaticJsonDocument<256> doc;
+  doc["secret"]  = DEVICE_SECRET;
+  doc["level"]   = level;   // "INFO" | "ERROR" | "SCAN"
+  doc["message"] = message;
+  String body;
+  serializeJson(doc, body);
+  postJson(path, body);
+}
+
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
 void scanWifi() {
   Serial.println("[WiFi] Scanning...");
@@ -162,17 +176,24 @@ void handleRfidScan(const String& tagId) {
 
 // ─── NFC Task (core 1) ───────────────────────────────────────────────────────
 void nfcTask(void* param) {
+  // Wait for WiFi so the PN532 status can be reported to the server.
+  while (WiFi.status() != WL_CONNECTED) vTaskDelay(pdMS_TO_TICKS(200));
+
   Serial2.begin(115200, SERIAL_8N1, 16, 17);
   nfc.begin();
 
   uint32_t ver = nfc.getFirmwareVersion();
   if (!ver) {
     Serial.println("[NFC] ERROR: PN532 not found!");
+    logToServer("ERROR", "PN532 not found (check HSU wiring / DIP switches / power)");
     vTaskDelete(NULL);
     return;
   }
-  Serial.printf("[NFC] PN532 firmware v%d.%d ready\n",
-    (ver >> 16) & 0xFF, (ver >> 8) & 0xFF);
+  char verMsg[48];
+  snprintf(verMsg, sizeof(verMsg), "PN532 firmware v%d.%d ready",
+    (int)((ver >> 16) & 0xFF), (int)((ver >> 8) & 0xFF));
+  Serial.printf("[NFC] %s\n", verMsg);
+  logToServer("INFO", verMsg);
   nfc.SAMConfig();
 
   for (;;) {
@@ -212,6 +233,7 @@ void setup() {
   delay(500);
 
   connectWifi();
+  logToServer("INFO", "Device booted");
 
   xTaskCreatePinnedToCore(nfcTask,  "nfc",  8192, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(pollTask, "poll", 8192, NULL, 1, NULL, 0);
