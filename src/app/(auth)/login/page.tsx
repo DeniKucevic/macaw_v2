@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Image from "next/image";
 import { Eye, EyeOff } from "lucide-react";
+import { Footer } from "@/components/shared/footer";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -38,7 +39,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-950">
+      <div className="flex-1 flex items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
@@ -92,6 +94,8 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+      </div>
+      <Footer />
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -118,7 +117,7 @@ export default async function MembersPage({
         <div>
           <h1 className="text-2xl font-bold">Članovi</h1>
           <p className="text-muted-foreground text-sm">
-            {allCount} ukupno · {activeCount} sa aktivnom članarinomom
+            {allCount} ukupno · {activeCount} sa aktivnom članarinom
           </p>
         </div>
         <AddMemberDialog />
@@ -208,9 +207,12 @@ export default async function MembersPage({
                     {fmt.format(member.createdAt)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href={`/admin/members/${member.id}`}>Pregled</Link>
-                    </Button>
+                    <Link
+                      href={`/admin/members/${member.id}`}
+                      className="text-sm font-medium text-foreground hover:text-brand transition-colors"
+                    >
+                      Pregled
+                    </Link>
                   </TableCell>
                 </TableRow>
               );
