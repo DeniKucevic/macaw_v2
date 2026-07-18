@@ -139,7 +139,7 @@ export function RfidSection({ memberId, initialTags, deviceId }: Props) {
 
         {adding && (
           <form onSubmit={handleAdd} className="space-y-2 pt-2 border-t">
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 value={tagId}
                 onChange={(e) => setTagId(e.target.value)}
@@ -152,7 +152,7 @@ export function RfidSection({ memberId, initialTags, deviceId }: Props) {
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="Naziv (opciono)"
-                className="max-w-36"
+                className="sm:max-w-36"
               />
             </div>
             {deviceId && (

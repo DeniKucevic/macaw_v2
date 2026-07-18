@@ -88,20 +88,25 @@ export function HoursForm({ initialHours, initialTimezone, isOwner }: Props) {
         </CardHeader>
         <CardContent className="space-y-3">
           {DAYS.map(({ key, label }) => (
-            <div key={key} className="flex items-center gap-4">
-              <Switch
-                checked={hours[key].isOpen}
-                onCheckedChange={(v) => updateDay(key, "isOpen", v)}
-                disabled={!isOwner}
-              />
-              <span className="w-28 text-sm font-medium">{label}</span>
-              <div className="flex items-center gap-2 flex-1">
+            <div
+              key={key}
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b pb-3 last:border-0 last:pb-0"
+            >
+              <div className="flex items-center gap-3 w-full sm:w-40">
+                <Switch
+                  checked={hours[key].isOpen}
+                  onCheckedChange={(v) => updateDay(key, "isOpen", v)}
+                  disabled={!isOwner}
+                />
+                <span className="text-sm font-medium">{label}</span>
+              </div>
+              <div className="flex items-center gap-2">
                 <Input
                   type="time"
                   value={hours[key].open}
                   onChange={(e) => updateDay(key, "open", e.target.value)}
                   disabled={!hours[key].isOpen || !isOwner}
-                  className="w-28"
+                  className="w-32 sm:w-28"
                 />
                 <span className="text-muted-foreground text-sm">–</span>
                 <Input
@@ -109,7 +114,7 @@ export function HoursForm({ initialHours, initialTimezone, isOwner }: Props) {
                   value={hours[key].close}
                   onChange={(e) => updateDay(key, "close", e.target.value)}
                   disabled={!hours[key].isOpen || !isOwner}
-                  className="w-28"
+                  className="w-32 sm:w-28"
                 />
                 {!hours[key].isOpen && (
                   <span className="text-xs text-muted-foreground">Zatvoreno</span>

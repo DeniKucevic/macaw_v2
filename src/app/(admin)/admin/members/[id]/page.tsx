@@ -89,22 +89,22 @@ export default async function MemberDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
+      <div className="flex items-start gap-2">
+        <Button variant="ghost" size="icon" asChild className="shrink-0">
           <Link href="/admin/members"><ChevronLeft className="h-4 w-4" /></Link>
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold">{member.name}</h1>
-          <p className="text-muted-foreground text-sm">{member.email} · {member.phone ?? "bez telefona"}</p>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold break-words">{member.name}</h1>
+          <p className="text-muted-foreground text-sm break-words">{member.email} · {member.phone ?? "bez telefona"}</p>
         </div>
-        <Badge className="ml-auto">{roleLabel[member.role] ?? member.role}</Badge>
+        <Badge className="shrink-0">{roleLabel[member.role] ?? member.role}</Badge>
       </div>
 
       {/* Aktivna članarina */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-base">Aktivna članarina</CardTitle>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {activeMembership && (
               <>
                 <ManualEntryButton memberId={member.id} memberName={member.name} />
@@ -167,8 +167,8 @@ export default async function MemberDetailPage({
             <TableRow>
               <TableHead>Datum i vreme</TableHead>
               <TableHead>Metod</TableHead>
-              <TableHead>Plan</TableHead>
-              <TableHead>Napomena</TableHead>
+              <TableHead className="hidden md:table-cell">Plan</TableHead>
+              <TableHead className="hidden lg:table-cell">Napomena</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -178,10 +178,10 @@ export default async function MemberDetailPage({
                 <TableCell>
                   <Badge variant="outline">{methodLabel[entry.method] ?? entry.method}</Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
+                <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                   {entry.membership?.plan.name ?? "—"}
                 </TableCell>
-                <TableCell className="text-muted-foreground text-sm">{entry.notes ?? "—"}</TableCell>
+                <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{entry.notes ?? "—"}</TableCell>
               </TableRow>
             ))}
             {member.entries.length === 0 && (
