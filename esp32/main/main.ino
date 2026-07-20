@@ -33,6 +33,8 @@
 
 #include <Arduino.h>
 #include <esp_system.h>
+#include <Preferences.h>
+#include <time.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -182,6 +184,139 @@ void logToServer(const char* level, const String& message) {
   postJson(path, body);
 }
 
+// ─── Offline fallback ─────────────────────────────────────────────────────────
+// The door must keep working when the network or server is down, WITHOUT
+// letting revoked members back in. So we cache the server's allowlist, refuse
+// to trust it once it's stale, and queue offline entries for upload later.
+Preferences prefs;
+const char*   NVS_NS               = "macaw";
+const uint32_t ALLOWLIST_REFRESH_MS = 15UL * 60UL * 1000UL; // refresh every 15 min
+const uint32_t QUEUE_SYNC_MS        = 30UL * 1000UL;        // retry upload every 30s
+const size_t   MAX_QUEUE_CHARS      = 3000;                 // ~200 queued entries
+
+// Epoch seconds, or 0 if the clock was never set (power loss without NTP).
+uint32_t nowEpoch() {
+  time_t t = time(nullptr);
+  return (t > 1600000000) ? (uint32_t)t : 0;
+}
+
+void syncClock() {
+  configTime(0, 0, "pool.ntp.org", "time.google.com"); // UTC; server expects epoch
+  for (int i = 0; i < 20 && nowEpoch() == 0; i++) delay(250);
+  Serial.printf("[TIME] epoch=%lu%s\n", (unsigned long)nowEpoch(),
+    nowEpoch() ? "" : " (NOT SET — offline entries will be stamped on arrival)");
+}
+
+bool allowlistHas(const String& tag) {
+  prefs.begin(NVS_NS, true);
+  String csv = prefs.getString("allow", "");
+  prefs.end();
+  if (csv.isEmpty()) return false;
+  String hay = "," + csv + ",";
+  String needle = "," + tag + ",";
+  hay.toUpperCase();
+  needle.toUpperCase();
+  return hay.indexOf(needle) >= 0;
+}
+
+// A cache older than the server's maxStaleHours is refused, so someone revoked
+// during a long outage can't keep getting in forever.
+bool allowlistFresh() {
+  prefs.begin(NVS_NS, true);
+  uint32_t at     = prefs.getUInt("allowAt", 0);
+  uint32_t staleH = prefs.getUInt("staleH", 24);
+  prefs.end();
+  uint32_t now = nowEpoch();
+  if (!at || !now) return false;
+  return (now - at) <= staleH * 3600UL;
+}
+
+void refreshAllowlist() {
+  String path = String("/api/device/") + DEVICE_ID + "/allowlist";
+  StaticJsonDocument<128> req;
+  req["secret"] = DEVICE_SECRET;
+  String body;
+  serializeJson(req, body);
+  String resp = postJson(path, body);
+  if (resp.isEmpty()) return;
+
+  // Parsed by hand: the list can hold hundreds of UIDs and a JSON document
+  // that large is a poor use of heap on this device.
+  int s = resp.indexOf("\"tags\":[");
+  if (s < 0) return;
+  s += 8;
+  int e = resp.indexOf(']', s);
+  if (e < 0) return;
+  String csv = resp.substring(s, e);
+  csv.replace("\"", "");
+  csv.replace(" ", "");
+
+  uint32_t staleH = 24;
+  int m = resp.indexOf("\"maxStaleHours\":");
+  if (m >= 0) staleH = (uint32_t)resp.substring(m + 16).toInt();
+
+  prefs.begin(NVS_NS, false);
+  prefs.putString("allow", csv);
+  prefs.putUInt("allowAt", nowEpoch());
+  prefs.putUInt("staleH", staleH ? staleH : 24);
+  prefs.end();
+
+  int count = csv.length() ? 1 : 0;
+  for (size_t i = 0; i < csv.length(); i++) if (csv[i] == ',') count++;
+  Serial.printf("[ALLOW] cached %d cards (stale after %luh)\n",
+    count, (unsigned long)staleH);
+}
+
+void queueOfflineEntry(const String& tag) {
+  prefs.begin(NVS_NS, false);
+  String q = prefs.getString("queue", "");
+  if (q.length() < MAX_QUEUE_CHARS) {
+    q += tag + ":" + String(nowEpoch()) + ";";
+    prefs.putString("queue", q);
+  } else {
+    Serial.println("[OFFLINE] queue full — entry not stored");
+  }
+  prefs.end();
+  Serial.printf("[OFFLINE] queued %s\n", tag.c_str());
+}
+
+// Uploads whatever piled up while offline. The queue is only cleared once the
+// server confirms, and the endpoint de-duplicates, so a failed upload is safe
+// to retry.
+void syncOfflineQueue() {
+  prefs.begin(NVS_NS, true);
+  String q = prefs.getString("queue", "");
+  prefs.end();
+  if (q.isEmpty()) return;
+
+  String body = String("{\"secret\":\"") + DEVICE_SECRET + "\",\"entries\":[";
+  int start = 0, n = 0;
+  bool first = true;
+  while (start < (int)q.length()) {
+    int sep = q.indexOf(';', start);
+    if (sep < 0) break;
+    String rec = q.substring(start, sep);
+    start = sep + 1;
+    int c = rec.indexOf(':');
+    if (c < 0) continue;
+    if (!first) body += ",";
+    body += "{\"tagId\":\"" + rec.substring(0, c) + "\",\"at\":" + rec.substring(c + 1) + "}";
+    first = false;
+    n++;
+  }
+  body += "]}";
+  if (n == 0) return;
+
+  String path = String("/api/device/") + DEVICE_ID + "/sync-entries";
+  String resp = postJson(path, body);
+  if (resp.isEmpty()) return; // still unreachable — keep the queue for later
+
+  prefs.begin(NVS_NS, false);
+  prefs.remove("queue");
+  prefs.end();
+  Serial.printf("[OFFLINE] synced %d queued entries\n", n);
+}
+
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
 void scanWifi() {
   Serial.println("[WiFi] Scanning...");
@@ -261,7 +396,20 @@ void handleRfidScan(const String& tagId) {
   serializeJson(req, body);
 
   String resp = postJson(path, body);
-  if (resp.isEmpty()) return;
+  if (resp.isEmpty()) {
+    // Server unreachable — decide locally from the cached allowlist. A stale
+    // cache is refused outright so revoked cards can't outlive an outage.
+    if (!allowlistFresh()) {
+      Serial.println("[RFID] OFFLINE: denied — no fresh allowlist cached");
+    } else if (allowlistHas(tagId)) {
+      Serial.println("[RFID] OFFLINE: allowed from cache");
+      queueOfflineEntry(tagId); // uploaded when the network returns
+      openDoor();
+    } else {
+      Serial.println("[RFID] OFFLINE: denied — card not in cached allowlist");
+    }
+    return;
+  }
 
   Serial.printf("[RFID] Response: %s\n", resp.c_str());
 
@@ -373,7 +521,22 @@ void nfcTask(void* param) {
 
 // ─── Poll Task (core 0) ──────────────────────────────────────────────────────
 void pollTask(void* param) {
+  uint32_t lastAllowlist = 0;
+  uint32_t lastQueueSync = 0;
+
   for (;;) {
+    // Keep the offline cache current and flush anything queued during an outage.
+    if (WiFi.status() == WL_CONNECTED) {
+      if (lastAllowlist == 0 || millis() - lastAllowlist >= ALLOWLIST_REFRESH_MS) {
+        refreshAllowlist();
+        lastAllowlist = millis();
+      }
+      if (millis() - lastQueueSync >= QUEUE_SYNC_MS) {
+        syncOfflineQueue();
+        lastQueueSync = millis();
+      }
+    }
+
     if (WiFi.status() != WL_CONNECTED) {
       connectWifi();
     }
@@ -396,9 +559,12 @@ void setup() {
     reason, (unsigned)ESP.getFreeHeap());
 
   connectWifi();
+  syncClock(); // offline entries need real timestamps, not millis()
   // Surfaces crash-loops in the app/Discord: a stream of "PANIC"/"BROWNOUT"
   // boots is the real fault, even when the symptom looks like a dead reader.
   logToServer("INFO", String("Device booted (reset: ") + reason + ")");
+  syncOfflineQueue(); // flush anything from before the reboot
+  refreshAllowlist();
 
   doorMutex = xSemaphoreCreateMutex(); // must exist before the tasks start
 
