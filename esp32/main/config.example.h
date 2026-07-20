@@ -7,6 +7,12 @@
 #define DEVICE_ID      "your_device_id"
 #define DEVICE_SECRET  "your_device_secret"
 
+// Password for wireless (OTA) firmware uploads. The device appears in the
+// Arduino IDE under Tools > Port as a network port ("macaw-door"), and the IDE
+// asks for this password on upload. Pick something non-trivial: anyone on the
+// same network could otherwise reflash the door controller.
+#define OTA_PASSWORD   "change_this_ota_password"
+
 // Master cards — scanned UIDs that open the door instantly, no server call.
 // Useful for owner/family cards that must always work (even offline).
 // Add each UID as a hex string (uppercase, no spaces). End the list with nullptr.

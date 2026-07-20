@@ -38,6 +38,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <ArduinoOTA.h>
 #include <ArduinoJson.h>
 #include <PN532.h>
 #if NFC_USE_I2C
@@ -184,6 +185,28 @@ void logToServer(const char* level, const String& message) {
   postJson(path, body);
 }
 
+// ─── OTA (wireless flashing) ──────────────────────────────────────────────────
+// Lets you upload new firmware over WiFi instead of unmounting the box: the
+// device shows up as a network port in the Arduino IDE. The ESP32 writes to the
+// spare app partition and only switches over once the upload verifies, so a
+// failed/interrupted update leaves the running firmware intact.
+bool otaStarted = false;
+
+void setupOTA() {
+  if (otaStarted || WiFi.status() != WL_CONNECTED) return;
+  ArduinoOTA.setHostname("macaw-door");
+  ArduinoOTA.setPassword(OTA_PASSWORD);
+  ArduinoOTA.onStart([]() { Serial.println("[OTA] update starting"); });
+  ArduinoOTA.onEnd([]()   { Serial.println("[OTA] done — rebooting"); });
+  ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
+    Serial.printf("[OTA] %u%%\r", (t ? (p * 100) / t : 0));
+  });
+  ArduinoOTA.onError([](ota_error_t e) { Serial.printf("[OTA] error %u\n", e); });
+  ArduinoOTA.begin();
+  otaStarted = true;
+  Serial.println("[OTA] ready (hostname: macaw-door)");
+}
+
 // ─── Offline fallback ─────────────────────────────────────────────────────────
 // The door must keep working when the network or server is down, WITHOUT
 // letting revoked members back in. So we cache the server's allowlist, refuse
@@ -309,7 +332,14 @@ void syncOfflineQueue() {
 
   String path = String("/api/device/") + DEVICE_ID + "/sync-entries";
   String resp = postJson(path, body);
-  if (resp.isEmpty()) return; // still unreachable — keep the queue for later
+
+  // Only drop the queue once the server CONFIRMS it stored them. An error body
+  // (401/400/500) is non-empty too, so testing for "not empty" would wipe the
+  // very entries we're trying to preserve.
+  if (resp.indexOf("\"synced\"") < 0) {
+    Serial.println("[OFFLINE] sync not confirmed — keeping queue for retry");
+    return;
+  }
 
   prefs.begin(NVS_NS, false);
   prefs.remove("queue");
@@ -331,15 +361,27 @@ void scanWifi() {
   Serial.println("[WiFi] Scan done");
 }
 
-void connectWifi() {
-  scanWifi();
+// Bounded on purpose. This used to loop forever, which meant a WiFi outage at
+// boot stopped the tasks from ever starting — so after a power cut with the
+// internet down, the door was dead and the offline cache was never consulted.
+// Now we give up after timeoutMs and run offline; pollTask keeps retrying.
+bool connectWifi(uint32_t timeoutMs = 20000, bool doScan = false) {
+  if (WiFi.status() == WL_CONNECTED) return true;
+  if (doScan) scanWifi(); // only worth the airtime on first boot
   Serial.printf("[WiFi] Connecting to %s", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
     delay(500);
     Serial.print(".");
   }
-  Serial.printf("\n[WiFi] Connected: %s\n", WiFi.localIP().toString().c_str());
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("\n[WiFi] Connected: %s (RSSI %d dBm)\n",
+      WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    return true;
+  }
+  Serial.println("\n[WiFi] not connected — running offline for now");
+  return false;
 }
 
 // ─── Long poll for door commands ─────────────────────────────────────────────
@@ -527,6 +569,7 @@ void pollTask(void* param) {
   for (;;) {
     // Keep the offline cache current and flush anything queued during an outage.
     if (WiFi.status() == WL_CONNECTED) {
+      setupOTA(); // no-op once started; brings OTA up if WiFi arrived late
       if (lastAllowlist == 0 || millis() - lastAllowlist >= ALLOWLIST_REFRESH_MS) {
         refreshAllowlist();
         lastAllowlist = millis();
@@ -558,13 +601,19 @@ void setup() {
   Serial.printf("\n[BOOT] reset reason: %s | free heap: %u\n",
     reason, (unsigned)ESP.getFreeHeap());
 
-  connectWifi();
-  syncClock(); // offline entries need real timestamps, not millis()
-  // Surfaces crash-loops in the app/Discord: a stream of "PANIC"/"BROWNOUT"
-  // boots is the real fault, even when the symptom looks like a dead reader.
-  logToServer("INFO", String("Device booted (reset: ") + reason + ")");
-  syncOfflineQueue(); // flush anything from before the reboot
-  refreshAllowlist();
+  // Boot must not depend on the network: if WiFi is down we still start the
+  // tasks so cards work from the cached allowlist.
+  if (connectWifi(20000, true)) {
+    setupOTA();
+    syncClock(); // offline entries need real timestamps, not millis()
+    // Surfaces crash-loops in the app/Discord: a stream of "PANIC"/"BROWNOUT"
+    // boots is the real fault, even when the symptom looks like a dead reader.
+    logToServer("INFO", String("Device booted (reset: ") + reason + ")");
+    syncOfflineQueue(); // flush anything from before the reboot
+    refreshAllowlist();
+  } else {
+    Serial.println("[BOOT] offline — using cached allowlist until WiFi returns");
+  }
 
   doorMutex = xSemaphoreCreateMutex(); // must exist before the tasks start
 
@@ -577,5 +626,7 @@ void setup() {
 }
 
 void loop() {
-  vTaskDelay(pdMS_TO_TICKS(1000));
+  // Must be serviced often enough for the IDE to reach the device mid-upload.
+  if (otaStarted) ArduinoOTA.handle();
+  vTaskDelay(pdMS_TO_TICKS(50));
 }
