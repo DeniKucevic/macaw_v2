@@ -2,23 +2,23 @@
  * Macaw ESP32 Firmware
  * Hardware: ESP32-WROOM-32U + Elechouse NFC Module V3 (PN532)
  *
- * ── Choosing the PN532 interface ─────────────────────────────────────────────
+ * ── PN532 interface: currently I2C ───────────────────────────────────────────
  * The module's 4-pin header (VCC/GND/SDA/SCL) works for BOTH modes — in HSU the
- * SDA pin is the module's TX and SCL is its RX. Pick one with NFC_USE_I2C below
+ * SDA pin is the module's TX and SCL is its RX. Switch with NFC_USE_I2C below
  * and set the DIP switches to match. ALWAYS verify against the table printed on
  * the board — if the switches and the code disagree, you get "PN532 not found".
  *
  *   Mode      SET0   SET1     Wiring (module → ESP32)
  *   --------  -----  -----    ------------------------------------------------
+ *   I2C  ◄──  ON     OFF      SDA     → GPIO21,        SCL     → GPIO22
  *   HSU/UART  OFF    OFF      SDA(TX) → GPIO16 (RX2),  SCL(RX) → GPIO17 (TX2)
- *   I2C       ON     OFF      SDA     → GPIO21,        SCL     → GPIO22
  *
- * NOTE for HSU: TX/RX must be CROSSED (module TX → ESP RX). Swapping these is
- * the single most common cause of "not found". I2C has no crossing, so if HSU
- * keeps failing, try I2C — it's the friendlier option for the 4-wire header.
+ * I2C is preferred here: there is no TX/RX crossing to get wrong (the most
+ * common cause of "not found" on HSU), and SDA/SCL match the header labels 1:1.
  *
- *   NFC VCC → 3.3V (try 5V if flaky — V3 accepts both)
- *   NFC GND → GND   (must share ground with the ESP32)
+ *   NFC VCC → 3.3V  (keep 3.3V on I2C — the module's pull-ups tie SDA/SCL to
+ *                    VCC, and the ESP32's pins are not 5V tolerant)
+ *   NFC GND → GND    (must share ground with the ESP32)
  *   Relay IN → GPIO4
  *
  * Libraries:
@@ -26,8 +26,8 @@
  *   - ArduinoJson by Benoit Blanchon
  */
 
-// 1 = I2C, 0 = HSU/UART. Change this one line to switch interfaces.
-#define NFC_USE_I2C 0
+// 1 = I2C (current), 0 = HSU/UART. Change this one line to switch interfaces.
+#define NFC_USE_I2C 1
 
 #include <Arduino.h>
 #include <WiFi.h>
