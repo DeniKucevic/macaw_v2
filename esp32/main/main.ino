@@ -32,6 +32,7 @@
 #define NFC_USE_I2C 1
 
 #include <Arduino.h>
+#include <esp_system.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -110,6 +111,22 @@ void i2cScan() {
   }
 }
 #endif
+
+// Why did we just boot? A repeating "PANIC"/"BROWNOUT"/watchdog here means the
+// board is crash-looping — which looks like a reader fault but isn't one.
+const char* resetReasonStr() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:  return "power-on";
+    case ESP_RST_EXT:      return "external reset";
+    case ESP_RST_SW:       return "software reset";
+    case ESP_RST_PANIC:    return "PANIC (crash)";
+    case ESP_RST_INT_WDT:  return "interrupt watchdog";
+    case ESP_RST_TASK_WDT: return "task watchdog";
+    case ESP_RST_WDT:      return "watchdog";
+    case ESP_RST_BROWNOUT: return "BROWNOUT (power dip)";
+    default:               return "unknown";
+  }
+}
 
 // Guards the relay: nfcTask (card) and pollTask (app) can both fire a door open
 // at the same instant. Without this, whichever finishes first drives the relay
@@ -283,12 +300,12 @@ void nfcTask(void* param) {
     ver = nfc.getFirmwareVersion();
     if (!ver) {
 #if NFC_USE_I2C
-      Serial.printf("[NFC] attempt %d: PN532 not found (I2C on SDA=%d SCL=%d) — retrying in 5s\n",
-        attempt, NFC_I2C_SDA_PIN, NFC_I2C_SCL_PIN);
+      Serial.printf("[NFC] attempt %d: PN532 not found (I2C on SDA=%d SCL=%d) | heap %u — retrying in 5s\n",
+        attempt, NFC_I2C_SDA_PIN, NFC_I2C_SCL_PIN, (unsigned)ESP.getFreeHeap());
       i2cScan();
 #else
-      Serial.printf("[NFC] attempt %d: PN532 not found (HSU on RX=%d TX=%d) — retrying in 5s\n",
-        attempt, NFC_UART_RX_PIN, NFC_UART_TX_PIN);
+      Serial.printf("[NFC] attempt %d: PN532 not found (HSU on RX=%d TX=%d) | heap %u — retrying in 5s\n",
+        attempt, NFC_UART_RX_PIN, NFC_UART_TX_PIN, (unsigned)ESP.getFreeHeap());
 #endif
       if (!reportedMissing) { // log once, not every retry
         logToServer("ERROR", NFC_USE_I2C
@@ -374,13 +391,21 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
+  const char* reason = resetReasonStr();
+  Serial.printf("\n[BOOT] reset reason: %s | free heap: %u\n",
+    reason, (unsigned)ESP.getFreeHeap());
+
   connectWifi();
-  logToServer("INFO", "Device booted");
+  // Surfaces crash-loops in the app/Discord: a stream of "PANIC"/"BROWNOUT"
+  // boots is the real fault, even when the symptom looks like a dead reader.
+  logToServer("INFO", String("Device booted (reset: ") + reason + ")");
 
   doorMutex = xSemaphoreCreateMutex(); // must exist before the tasks start
 
-  xTaskCreatePinnedToCore(nfcTask,  "nfc",  8192, NULL, 1, NULL, 1);
-  xTaskCreatePinnedToCore(pollTask, "poll", 8192, NULL, 1, NULL, 0);
+  // 12KB stacks: both tasks open TLS connections (HTTPS), and the mbedTLS
+  // handshake overflows an 8KB task stack — which shows up as a PANIC reboot.
+  xTaskCreatePinnedToCore(nfcTask,  "nfc",  12288, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(pollTask, "poll", 12288, NULL, 1, NULL, 0);
 
   Serial.println("[BOOT] Macaw ready");
 }
