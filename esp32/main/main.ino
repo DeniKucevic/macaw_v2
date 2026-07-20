@@ -10,8 +10,10 @@
  *
  *   Mode      SET0   SET1     Wiring (module → ESP32)
  *   --------  -----  -----    ------------------------------------------------
- *   I2C  ◄──  ON     OFF      SDA     → GPIO21,        SCL     → GPIO22
+ *   I2C  ◄──  ON     OFF      SDA     → GPIO32,        SCL     → GPIO33
  *   HSU/UART  OFF    OFF      SDA(TX) → GPIO16 (RX2),  SCL(RX) → GPIO17 (TX2)
+ *
+ *   (I2C pins are configurable — see NFC_I2C_SDA_PIN / NFC_I2C_SCL_PIN below.)
  *
  * I2C is preferred here: there is no TX/RX crossing to get wrong (the most
  * common cause of "not found" on HSU), and SDA/SCL match the header labels 1:1.
@@ -52,8 +54,12 @@ const int  POLL_TIMEOUT_MS  = 9000; // server holds 8s, we allow 9s before retry
 // PN532 pins
 const int  NFC_UART_RX_PIN  = 16; // ESP32 RX2  ← module SDA/TX
 const int  NFC_UART_TX_PIN  = 17; // ESP32 TX2  → module SCL/RX
-const int  NFC_I2C_SDA_PIN  = 21;
-const int  NFC_I2C_SCL_PIN  = 22;
+// I2C can live on almost any GPIO thanks to the ESP32's GPIO matrix — these are
+// just the two we picked. Safe alternatives if the board layout suits you better:
+// 25/26, 26/27, 13/14, 18/19, 21/22. AVOID: 6-11 (flash), 34-39 (input-only, so
+// they can't drive SDA), 0/2/12/15 (boot strapping), 1/3 (USB serial), 4 (relay).
+const int  NFC_I2C_SDA_PIN  = 32;
+const int  NFC_I2C_SCL_PIN  = 33;
 
 // ─── NFC ──────────────────────────────────────────────────────────────────────
 #if NFC_USE_I2C
