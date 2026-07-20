@@ -35,13 +35,25 @@ const int  POLL_TIMEOUT_MS  = 9000; // server holds 8s, we allow 9s before retry
 PN532_HSU pn532hsu(Serial2);
 PN532 nfc(pn532hsu);
 
+// Guards the relay: nfcTask (card) and pollTask (app) can both fire a door open
+// at the same instant. Without this, whichever finishes first drives the relay
+// LOW while the other still thinks the door is open — cutting the open short.
+SemaphoreHandle_t doorMutex = NULL;
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 void openDoor() {
+  // Non-blocking: if the door is already opening, this trigger is redundant —
+  // the door is open either way, so don't queue a second relay cycle.
+  if (doorMutex && xSemaphoreTake(doorMutex, 0) != pdTRUE) {
+    Serial.println("[DOOR] Already opening — ignoring duplicate trigger");
+    return;
+  }
   Serial.println("[DOOR] Opening");
   digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? LOW : HIGH);
   delay(DOOR_OPEN_MS);
   digitalWrite(RELAY_PIN, RELAY_ACTIVE_LOW ? HIGH : LOW);
   Serial.println("[DOOR] Closed");
+  if (doorMutex) xSemaphoreGive(doorMutex);
 }
 
 String postJson(const String& path, const String& body) {
@@ -257,6 +269,8 @@ void setup() {
 
   connectWifi();
   logToServer("INFO", "Device booted");
+
+  doorMutex = xSemaphoreCreateMutex(); // must exist before the tasks start
 
   xTaskCreatePinnedToCore(nfcTask,  "nfc",  8192, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(pollTask, "poll", 8192, NULL, 1, NULL, 0);
