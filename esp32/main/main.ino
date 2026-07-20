@@ -85,6 +85,32 @@ void nfcBusBegin() {
   delay(200); // give the reader a moment to wake before probing
 }
 
+#if NFC_USE_I2C
+// Diagnostic: lists every device that ACKs on the bus. This separates "the
+// wiring/power/DIP switches are wrong" (nothing answers at all) from "the
+// module is talking but the driver is unhappy" (0x24 shows up).
+void i2cScan() {
+  Serial.println("[I2C] scanning bus...");
+  int found = 0;
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      Serial.printf("[I2C]   device at 0x%02X%s\n",
+        addr, addr == 0x24 ? "   <-- PN532" : "");
+      found++;
+    }
+  }
+  if (found == 0) {
+    Serial.println("[I2C]   NOTHING on the bus.");
+    Serial.println("[I2C]   => not a pin/driver problem. Check, in order:");
+    Serial.println("[I2C]      1) DIP switches (I2C = SET0 ON, SET1 OFF)");
+    Serial.println("[I2C]      2) 3.3V actually present on the module's VCC pin");
+    Serial.println("[I2C]      3) GND shared between module and ESP32");
+    Serial.println("[I2C]      4) SDA/SCL on the pins the sketch prints above");
+  }
+}
+#endif
+
 // Guards the relay: nfcTask (card) and pollTask (app) can both fire a door open
 // at the same instant. Without this, whichever finishes first drives the relay
 // LOW while the other still thinks the door is open — cutting the open short.
@@ -256,8 +282,14 @@ void nfcTask(void* param) {
     nfcBusBegin();
     ver = nfc.getFirmwareVersion();
     if (!ver) {
-      Serial.printf("[NFC] attempt %d: PN532 not found (%s) — retrying in 5s\n",
-        attempt, NFC_USE_I2C ? "I2C" : "HSU");
+#if NFC_USE_I2C
+      Serial.printf("[NFC] attempt %d: PN532 not found (I2C on SDA=%d SCL=%d) — retrying in 5s\n",
+        attempt, NFC_I2C_SDA_PIN, NFC_I2C_SCL_PIN);
+      i2cScan();
+#else
+      Serial.printf("[NFC] attempt %d: PN532 not found (HSU on RX=%d TX=%d) — retrying in 5s\n",
+        attempt, NFC_UART_RX_PIN, NFC_UART_TX_PIN);
+#endif
       if (!reportedMissing) { // log once, not every retry
         logToServer("ERROR", NFC_USE_I2C
           ? "PN532 not found on I2C (check DIP SET0=ON/SET1=OFF, SDA=21, SCL=22, power)"
