@@ -3,7 +3,8 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
+import { fmtDate, fmtTime, DEFAULT_TZ } from "@/lib/time";
 import { MembershipStatus } from "@/generated/prisma/client";
 import { Calendar, Dumbbell, Clock } from "lucide-react";
 import { DoorOpenButton } from "../door/door-open-button";
@@ -36,6 +37,12 @@ export default async function DashboardPage() {
   });
 
   if (!user) redirect("/login");
+
+  const gym = await db.gym.findUnique({
+    where: { id: user.gymId },
+    select: { timezone: true },
+  });
+  const tz = gym?.timezone || DEFAULT_TZ;
 
   const devices = await db.device.findMany({
     where: { gymId: user.gymId },
@@ -108,7 +115,7 @@ export default async function DashboardPage() {
                   <Calendar className="h-10 w-10 text-primary" />
                 </div>
                 <p className="text-lg font-semibold">
-                  Ističe {format(membership.expiresAt, "dd.MM.yyyy")}
+                  Ističe {fmtDate(membership.expiresAt, tz)}
                 </p>
                 <p className="text-muted-foreground text-sm">
                   {formatDistanceToNow(membership.expiresAt, { addSuffix: true })}
@@ -139,8 +146,8 @@ export default async function DashboardPage() {
         <CardContent>
           {lastEntry ? (
             <div className="text-sm">
-              <p className="font-medium">{format(lastEntry.enteredAt, "dd.MM.yyyy")}</p>
-              <p className="text-muted-foreground">{format(lastEntry.enteredAt, "HH:mm")} · putem {methodLabel[lastEntry.method] ?? lastEntry.method}</p>
+              <p className="font-medium">{fmtDate(lastEntry.enteredAt, tz)}</p>
+              <p className="text-muted-foreground">{fmtTime(lastEntry.enteredAt, tz)} · putem {methodLabel[lastEntry.method] ?? lastEntry.method}</p>
             </div>
           ) : (
             <p className="text-muted-foreground text-sm">Nema zabeleženih poseta.</p>

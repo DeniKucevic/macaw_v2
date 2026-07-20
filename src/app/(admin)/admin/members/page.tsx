@@ -14,21 +14,10 @@ import {
 } from "@/components/ui/table";
 import { AddMemberDialog } from "./add-member-dialog";
 import { MembersControls } from "./members-controls";
+import { fmtDate, fmtDayMonth, DEFAULT_TZ } from "@/lib/time";
 import { MembershipStatus } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
 
-const fmt = new Intl.DateTimeFormat("sr-Latn-RS", {
-  timeZone: "Europe/Belgrade",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-
-const fmtShort = new Intl.DateTimeFormat("sr-Latn-RS", {
-  timeZone: "Europe/Belgrade",
-  day: "2-digit",
-  month: "2-digit",
-});
 
 const roleLabel: Record<string, string> = {
   OWNER: "Vlasnik",
@@ -46,6 +35,9 @@ export default async function MembersPage({
 
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (!user) redirect("/login");
+
+  const gymTz = await db.gym.findUnique({ where: { id: user.gymId }, select: { timezone: true } });
+  const tz = gymTz?.timezone || DEFAULT_TZ;
 
   const { q, sort } = await searchParams;
   const search = q?.trim() ?? "";
@@ -201,7 +193,7 @@ export default async function MembersPage({
                           const soon = daysLeft <= 7;
                           return (
                             <span className={soon ? "text-orange-500 font-medium ml-1" : "text-muted-foreground ml-1"}>
-                              (ist. {fmtShort.format(activeMembership.expiresAt)}{soon ? ` · ${daysLeft}d` : ""})
+                              (ist. {fmtDayMonth(activeMembership.expiresAt, tz)}{soon ? ` · ${daysLeft}d` : ""})
                             </span>
                           );
                         })()}
@@ -211,7 +203,7 @@ export default async function MembersPage({
                     )}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-                    {fmt.format(member.createdAt)}
+                    {fmtDate(member.createdAt, tz)}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
                     <Link

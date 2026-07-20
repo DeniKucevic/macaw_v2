@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format } from "date-fns";
+import { fmtDate, fmtDateTime, DEFAULT_TZ } from "@/lib/time";
 import { AssignMembershipDialog } from "./assign-membership-dialog";
 import { ManualEntryButton } from "./manual-entry-button";
 import { EditMembershipDialog } from "./edit-membership-dialog";
@@ -87,6 +87,12 @@ export default async function MemberDetailPage({
     select: { id: true },
   });
 
+  const gym = await db.gym.findUnique({
+    where: { id: caller.gymId },
+    select: { timezone: true },
+  });
+  const tz = gym?.timezone || DEFAULT_TZ;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start gap-2">
@@ -137,12 +143,12 @@ export default async function MemberDetailPage({
               {activeMembership.plan.type === "TIME_BASED" && activeMembership.expiresAt && (
                 <div>
                   <p className="text-xs text-muted-foreground">Ističe</p>
-                  <p className="font-medium">{format(activeMembership.expiresAt, "dd.MM.yyyy")}</p>
+                  <p className="font-medium">{fmtDate(activeMembership.expiresAt, tz)}</p>
                 </div>
               )}
               <div>
                 <p className="text-xs text-muted-foreground">Počelo</p>
-                <p className="font-medium">{format(activeMembership.startsAt, "dd.MM.yyyy")}</p>
+                <p className="font-medium">{fmtDate(activeMembership.startsAt, tz)}</p>
               </div>
             </div>
           ) : (
@@ -174,7 +180,7 @@ export default async function MemberDetailPage({
           <TableBody>
             {member.entries.map((entry) => (
               <TableRow key={entry.id}>
-                <TableCell className="text-sm">{format(entry.enteredAt, "dd.MM.yyyy HH:mm")}</TableCell>
+                <TableCell className="text-sm">{fmtDateTime(entry.enteredAt, tz)}</TableCell>
                 <TableCell>
                   <Badge variant="outline">{methodLabel[entry.method] ?? entry.method}</Badge>
                 </TableCell>

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { fmtDateTime, DEFAULT_TZ } from "@/lib/time";
 import {
   Table,
   TableBody,
@@ -12,15 +13,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const fmt = new Intl.DateTimeFormat("sr-Latn-RS", {
-  timeZone: "Europe/Belgrade",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
 
 const actionLabel: Record<string, string> = {
   MEMBER_CREATED: "Član kreiran",
@@ -43,6 +35,9 @@ export default async function AuditPage() {
 
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (!user) redirect("/login");
+
+  const gymTz = await db.gym.findUnique({ where: { id: user.gymId }, select: { timezone: true } });
+  const tz = gymTz?.timezone || DEFAULT_TZ;
 
   const logs = await db.auditLog.findMany({
     where: { gymId: user.gymId },
@@ -76,7 +71,7 @@ export default async function AuditPage() {
               return (
                 <TableRow key={log.id}>
                   <TableCell className="text-sm font-mono whitespace-nowrap">
-                    {fmt.format(log.createdAt)}
+                    {fmtDateTime(log.createdAt, tz)}
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm">
                     {log.actorName ?? (isSystem ? "Sistem" : "—")}

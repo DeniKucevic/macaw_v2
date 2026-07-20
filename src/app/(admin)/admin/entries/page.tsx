@@ -12,17 +12,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EntriesControls } from "./entries-controls";
+import { fmtShortDateTime, gymDayRange, DEFAULT_TZ } from "@/lib/time";
 import { EntryMethod } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
 
-const fmt = new Intl.DateTimeFormat("sr-Latn-RS", {
-  timeZone: "Europe/Belgrade",
-  day: "2-digit",
-  month: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
 
 const methodLabel: Record<string, string> = {
   RFID: "RFID",
@@ -41,14 +34,19 @@ export default async function EntriesPage({
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (!user) redirect("/login");
 
+  const gymTz = await db.gym.findUnique({ where: { id: user.gymId }, select: { timezone: true } });
+  const tz = gymTz?.timezone || DEFAULT_TZ;
+
   const { q, period = "7d", method = "all" } = await searchParams;
   const search = q?.trim() ?? "";
 
   const now = new Date();
   const where: Prisma.EntryWhereInput = { gymId: user.gymId };
 
+  const gymToday = gymDayRange(now, tz);
+
   if (period === "today") {
-    where.enteredAt = { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) };
+    where.enteredAt = { gte: gymToday.start };
   } else if (period === "7d") {
     where.enteredAt = { gte: new Date(now.getTime() - 7 * 86400000) };
   } else if (period === "30d") {
@@ -75,8 +73,7 @@ export default async function EntriesPage({
     take: 100,
   });
 
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayEntries = entries.filter((e) => e.enteredAt >= todayStart);
+  const todayEntries = entries.filter((e) => e.enteredAt >= gymToday.start);
 
   return (
     <div className="space-y-6">
@@ -106,7 +103,7 @@ export default async function EntriesPage({
               return (
                 <TableRow key={entry.id} className={denied ? "bg-red-50 dark:bg-red-950/20" : ""}>
                   <TableCell className="text-sm font-mono">
-                    {fmt.format(entry.enteredAt)}
+                    {fmtShortDateTime(entry.enteredAt, tz)}
                   </TableCell>
                   <TableCell className="font-medium">{entry.user ? entry.user.name : "Nepoznat"}</TableCell>
                   <TableCell className="hidden sm:table-cell">

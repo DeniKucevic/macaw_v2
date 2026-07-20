@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { EntryMethod, MembershipStatus, Role } from "@/generated/prisma/client";
-import { startOfDay, endOfDay } from "date-fns";
+import { gymDayRange } from "@/lib/time";
 
 export type EntryResult =
   | { allowed: true; membership: { id: string; type: string; sessionsLeft: number | null; expiresAt: Date | null } }
@@ -116,12 +116,15 @@ export async function validateAndRecordEntry(
   // but do NOT consume a session or count toward the daily limit. Applies to both
   // card (RFID) and app (PHONE) since both flow through here.
   const GRACE_MS = 60 * 60 * 1000; // 1 hour
+  // "Today" is the gym's local day (not the server's UTC day), so the daily
+  // limit rolls over at local midnight.
+  const today = gymDayRange(now, gym?.timezone);
   const todayEntries = await db.entry.findMany({
     where: {
       gymId,
       userId,
       membershipId: membership.id,
-      enteredAt: { gte: startOfDay(now), lte: endOfDay(now) },
+      enteredAt: { gte: today.start, lte: today.end },
     },
     orderBy: { enteredAt: "asc" },
     select: { enteredAt: true },

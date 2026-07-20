@@ -14,6 +14,7 @@ import {
 import { AddDeviceDialog } from "./add-device-dialog";
 import { AdminDoorOpenButton } from "./admin-door-open";
 import { formatDistanceToNow } from "date-fns";
+import { fmtLogTime, DEFAULT_TZ } from "@/lib/time";
 
 export default async function DevicesPage() {
   const session = await getSession();
@@ -27,21 +28,14 @@ export default async function DevicesPage() {
     orderBy: { createdAt: "desc" },
   });
 
+  const gymTz = await db.gym.findUnique({ where: { id: user.gymId }, select: { timezone: true } });
+  const tz = gymTz?.timezone || DEFAULT_TZ;
+
   const logs = await db.deviceLog.findMany({
     where: { gymId: user.gymId },
     orderBy: { createdAt: "desc" },
     take: 50,
     include: { device: { select: { name: true } } },
-  });
-
-  const logFmt = new Intl.DateTimeFormat("sr-Latn-RS", {
-    timeZone: "Europe/Belgrade",
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
   });
 
   const levelVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -123,7 +117,7 @@ export default async function DevicesPage() {
               {logs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="text-xs font-mono whitespace-nowrap">
-                    {logFmt.format(log.createdAt)}
+                    {fmtLogTime(log.createdAt, tz)}
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-sm">{log.device.name}</TableCell>
                   <TableCell>

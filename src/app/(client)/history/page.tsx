@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+import { fmtDate, fmtTime, fmtMonthYear, DEFAULT_TZ } from "@/lib/time";
 
 const methodLabel: Record<string, string> = {
   RFID: "RFID",
@@ -18,6 +18,12 @@ export default async function HistoryPage() {
   const user = await db.user.findUnique({ where: { id: session.user.id } });
   if (!user) redirect("/login");
 
+  const gym = await db.gym.findUnique({
+    where: { id: user.gymId },
+    select: { timezone: true },
+  });
+  const tz = gym?.timezone || DEFAULT_TZ;
+
   const entries = await db.entry.findMany({
     where: { userId: user.id, gymId: user.gymId },
     include: { membership: { include: { plan: true } } },
@@ -27,7 +33,7 @@ export default async function HistoryPage() {
 
   // Grupišemo po mesecu
   const grouped = entries.reduce<Record<string, typeof entries>>((acc, entry) => {
-    const key = format(entry.enteredAt, "MM.yyyy");
+    const key = fmtMonthYear(entry.enteredAt, tz);
     if (!acc[key]) acc[key] = [];
     acc[key].push(entry);
     return acc;
@@ -56,8 +62,8 @@ export default async function HistoryPage() {
                 {monthEntries.map((entry) => (
                   <div key={entry.id} className="flex items-center justify-between px-4 py-3">
                     <div>
-                      <p className="font-medium text-sm">{format(entry.enteredAt, "dd.MM.yyyy")}</p>
-                      <p className="text-xs text-muted-foreground">{format(entry.enteredAt, "HH:mm")}</p>
+                      <p className="font-medium text-sm">{fmtDate(entry.enteredAt, tz)}</p>
+                      <p className="text-xs text-muted-foreground">{fmtTime(entry.enteredAt, tz)}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{entry.membership?.plan.name ?? "—"}</span>
