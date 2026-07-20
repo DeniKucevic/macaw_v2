@@ -196,6 +196,13 @@ void nfcTask(void* param) {
   logToServer("INFO", verMsg);
   nfc.SAMConfig();
 
+  // A failed read is indistinguishable from "no card present", so the reader
+  // could die mid-run and we'd never notice (the poll task keeps the device
+  // "Online"). Actively probe the PN532 on an interval to catch that.
+  const uint32_t NFC_HEALTH_MS = 60000; // probe once a minute
+  uint32_t lastHealthCheck = millis();
+  bool nfcHealthy = true;
+
   for (;;) {
     uint8_t uid[7];
     uint8_t uidLen = 0;
@@ -208,6 +215,22 @@ void nfcTask(void* param) {
       tagId.toUpperCase();
       handleRfidScan(tagId);
       vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+
+    if (millis() - lastHealthCheck >= NFC_HEALTH_MS) {
+      lastHealthCheck = millis();
+      bool alive = nfc.getFirmwareVersion() != 0;
+      // Edge-triggered: log only on transitions, so a dead reader alerts once.
+      if (!alive && nfcHealthy) {
+        nfcHealthy = false;
+        Serial.println("[NFC] ERROR: PN532 stopped responding");
+        logToServer("ERROR", "PN532 stopped responding (reader disconnected?)");
+      } else if (alive && !nfcHealthy) {
+        nfcHealthy = true;
+        nfc.SAMConfig(); // re-arm the reader after it comes back
+        Serial.println("[NFC] PN532 recovered");
+        logToServer("INFO", "PN532 recovered");
+      }
     }
   }
 }
