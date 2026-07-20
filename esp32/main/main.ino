@@ -1,28 +1,46 @@
 /**
  * Macaw ESP32 Firmware
- * Hardware: ESP32-WROOM-32U + Elechouse NFC Module V3 (PN532, HSU mode)
+ * Hardware: ESP32-WROOM-32U + Elechouse NFC Module V3 (PN532)
  *
- * Wiring:
- *   NFC SDA (TX) → ESP32 GPIO16 (RX2)
- *   NFC SCL (RX) → ESP32 GPIO17 (TX2)
- *   NFC VCC      → 3.3V
- *   NFC GND      → GND
- *   Relay IN     → GPIO4
+ * ── Choosing the PN532 interface ─────────────────────────────────────────────
+ * The module's 4-pin header (VCC/GND/SDA/SCL) works for BOTH modes — in HSU the
+ * SDA pin is the module's TX and SCL is its RX. Pick one with NFC_USE_I2C below
+ * and set the DIP switches to match. ALWAYS verify against the table printed on
+ * the board — if the switches and the code disagree, you get "PN532 not found".
  *
- * Elechouse V3 switch positions for HSU: SCK=OFF, SDA=OFF (both OFF)
+ *   Mode      SET0   SET1     Wiring (module → ESP32)
+ *   --------  -----  -----    ------------------------------------------------
+ *   HSU/UART  OFF    OFF      SDA(TX) → GPIO16 (RX2),  SCL(RX) → GPIO17 (TX2)
+ *   I2C       ON     OFF      SDA     → GPIO21,        SCL     → GPIO22
+ *
+ * NOTE for HSU: TX/RX must be CROSSED (module TX → ESP RX). Swapping these is
+ * the single most common cause of "not found". I2C has no crossing, so if HSU
+ * keeps failing, try I2C — it's the friendlier option for the 4-wire header.
+ *
+ *   NFC VCC → 3.3V (try 5V if flaky — V3 accepts both)
+ *   NFC GND → GND   (must share ground with the ESP32)
+ *   Relay IN → GPIO4
  *
  * Libraries:
  *   - Elechouse PN532 (manual install from GitHub)
  *   - ArduinoJson by Benoit Blanchon
  */
 
+// 1 = I2C, 0 = HSU/UART. Change this one line to switch interfaces.
+#define NFC_USE_I2C 0
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <PN532_HSU.h>
 #include <PN532.h>
+#if NFC_USE_I2C
+  #include <Wire.h>
+  #include <PN532_I2C.h>
+#else
+  #include <PN532_HSU.h>
+#endif
 #include "config.h"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -31,9 +49,35 @@ const bool RELAY_ACTIVE_LOW = false;
 const int  DOOR_OPEN_MS     = 1000;
 const int  POLL_TIMEOUT_MS  = 9000; // server holds 8s, we allow 9s before retry
 
+// PN532 pins
+const int  NFC_UART_RX_PIN  = 16; // ESP32 RX2  ← module SDA/TX
+const int  NFC_UART_TX_PIN  = 17; // ESP32 TX2  → module SCL/RX
+const int  NFC_I2C_SDA_PIN  = 21;
+const int  NFC_I2C_SCL_PIN  = 22;
+
 // ─── NFC ──────────────────────────────────────────────────────────────────────
-PN532_HSU pn532hsu(Serial2);
-PN532 nfc(pn532hsu);
+#if NFC_USE_I2C
+  PN532_I2C pn532i2c(Wire);
+  PN532 nfc(pn532i2c);
+#else
+  PN532_HSU pn532hsu(Serial2);
+  PN532 nfc(pn532hsu);
+#endif
+
+// Brings up the bus the PN532 sits on. For HSU the pins are re-applied AFTER
+// nfc.begin(), because PN532_HSU::begin() calls Serial2.begin(115200) with the
+// default pins and would otherwise clobber our configuration.
+void nfcBusBegin() {
+#if NFC_USE_I2C
+  Wire.begin(NFC_I2C_SDA_PIN, NFC_I2C_SCL_PIN);
+  nfc.begin();
+#else
+  Serial2.begin(115200, SERIAL_8N1, NFC_UART_RX_PIN, NFC_UART_TX_PIN);
+  nfc.begin();
+  Serial2.begin(115200, SERIAL_8N1, NFC_UART_RX_PIN, NFC_UART_TX_PIN);
+#endif
+  delay(200); // give the reader a moment to wake before probing
+}
 
 // Guards the relay: nfcTask (card) and pollTask (app) can both fire a door open
 // at the same instant. Without this, whichever finishes first drives the relay
@@ -188,23 +232,40 @@ void handleRfidScan(const String& tagId) {
 
 // ─── NFC Task (core 1) ───────────────────────────────────────────────────────
 void nfcTask(void* param) {
-  // Wait for WiFi so the PN532 status can be reported to the server.
-  while (WiFi.status() != WL_CONNECTED) vTaskDelay(pdMS_TO_TICKS(200));
-
-  Serial2.begin(115200, SERIAL_8N1, 16, 17);
-  nfc.begin();
-
-  uint32_t ver = nfc.getFirmwareVersion();
-  if (!ver) {
-    Serial.println("[NFC] ERROR: PN532 not found!");
-    logToServer("ERROR", "PN532 not found (check HSU wiring / DIP switches / power)");
-    vTaskDelete(NULL);
-    return;
+  // Give WiFi a chance so the reader status can be reported — but don't block
+  // forever: the reader (and master cards) must work even with no network.
+  for (int i = 0; i < 50 && WiFi.status() != WL_CONNECTED; i++) {
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
+
+  // Keep retrying until the reader answers. Never delete the task: that made a
+  // boot-time miss permanent until a power cycle, so every wiring/DIP-switch
+  // experiment needed a reboot. Now it self-heals within ~5s of being fixed.
+  uint32_t ver = 0;
+  bool reportedMissing = false;
+  int attempt = 0;
+
+  while (!ver) {
+    attempt++;
+    nfcBusBegin();
+    ver = nfc.getFirmwareVersion();
+    if (!ver) {
+      Serial.printf("[NFC] attempt %d: PN532 not found (%s) — retrying in 5s\n",
+        attempt, NFC_USE_I2C ? "I2C" : "HSU");
+      if (!reportedMissing) { // log once, not every retry
+        logToServer("ERROR", NFC_USE_I2C
+          ? "PN532 not found on I2C (check DIP SET0=ON/SET1=OFF, SDA=21, SCL=22, power)"
+          : "PN532 not found on HSU (check DIP both OFF, TX/RX crossed on 16/17, power)");
+        reportedMissing = true;
+      }
+      vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+  }
+
   char verMsg[48];
   snprintf(verMsg, sizeof(verMsg), "PN532 firmware v%d.%d ready",
     (int)((ver >> 16) & 0xFF), (int)((ver >> 8) & 0xFF));
-  Serial.printf("[NFC] %s\n", verMsg);
+  Serial.printf("[NFC] %s (%s)\n", verMsg, NFC_USE_I2C ? "I2C" : "HSU");
   logToServer("INFO", verMsg);
   nfc.SAMConfig();
 
@@ -232,6 +293,14 @@ void nfcTask(void* param) {
     if (millis() - lastHealthCheck >= NFC_HEALTH_MS) {
       lastHealthCheck = millis();
       bool alive = nfc.getFirmwareVersion() != 0;
+
+      // If it stopped answering, try bringing the bus back up before declaring
+      // it dead — a brief glitch shouldn't need a reboot.
+      if (!alive) {
+        nfcBusBegin();
+        alive = nfc.getFirmwareVersion() != 0;
+      }
+
       // Edge-triggered: log only on transitions, so a dead reader alerts once.
       if (!alive && nfcHealthy) {
         nfcHealthy = false;
