@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { Pencil } from "lucide-react";
 
 interface Membership {
@@ -28,6 +29,7 @@ interface Membership {
   expiresAt: Date | null;
   sessionsTotal: number | null;
   sessionsUsed: number | null;
+  notes: string | null;
   plan: { type: string };
 }
 
@@ -43,6 +45,7 @@ export function EditMembershipDialog({ membership }: { membership: Membership })
   const [extendDays, setExtendDays] = useState("30");
   const [addSessions, setAddSessions] = useState("10");
   const [status, setStatus] = useState(membership.status);
+  const [notes, setNotes] = useState(membership.notes ?? "");
 
   async function handleUpdate(payload: Record<string, unknown>) {
     setError("");
@@ -83,6 +86,7 @@ export function EditMembershipDialog({ membership }: { membership: Membership })
               {isTimeBased && <TabsTrigger value="extend" className="flex-1">Produženje</TabsTrigger>}
               {isSessionBased && <TabsTrigger value="sessions" className="flex-1">Dodaj treninge</TabsTrigger>}
               <TabsTrigger value="status" className="flex-1">Status</TabsTrigger>
+              <TabsTrigger value="notes" className="flex-1">Napomena</TabsTrigger>
             </TabsList>
 
             {isTimeBased && (
@@ -149,6 +153,28 @@ export function EditMembershipDialog({ membership }: { membership: Membership })
                 className="w-full"
               >
                 {loading ? "Ažuriranje…" : "Ažuriraj status"}
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="notes" className="space-y-3 pt-3">
+              <div className="space-y-1">
+                <Label>Napomena</Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Npr. donosi pare kasnije…"
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Ostavite prazno da obrišete napomenu.
+                </p>
+              </div>
+              <Button
+                onClick={() => handleUpdate({ notes })}
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? "Ažuriranje…" : "Sačuvaj napomenu"}
               </Button>
             </TabsContent>
           </Tabs>

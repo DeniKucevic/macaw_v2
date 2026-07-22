@@ -12,7 +12,11 @@ const UpdateMembershipSchema = z.object({
   sessionsTotal: z.number().int().nonnegative().optional(),
   sessionsUsed: z.number().int().nonnegative().optional(),
   maxPerDay: z.number().int().positive().nullable().optional(),
-  notes: z.string().optional(),
+  // Emptying the note clears it (stored as NULL, not "").
+  notes: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v.trim() || null)),
   // Extend a time-based membership by N extra days
   extendDays: z.number().int().positive().optional(),
   // Add extra sessions
