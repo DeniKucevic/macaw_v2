@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="sr-Latn-RS">
       <body className={`${geist.variable} antialiased font-sans`}>
         <NextTopLoader showSpinner={false} />
         {children}

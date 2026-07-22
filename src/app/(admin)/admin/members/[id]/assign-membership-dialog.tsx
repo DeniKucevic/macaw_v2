@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
 
@@ -110,12 +110,7 @@ export function AssignMembershipDialog({ memberId, plans }: Props) {
           )}
           <div className="space-y-1">
             <Label>Počinje</Label>
-            <Input
-              type="date"
-              value={startsAt}
-              onChange={(e) => setStartsAt(e.target.value)}
-              required
-            />
+            <DateInput value={startsAt} onChange={setStartsAt} required />
           </div>
           <div className="space-y-1">
             <Label>Napomena (opciono)</Label>
