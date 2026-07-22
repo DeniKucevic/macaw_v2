@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AddPlanDialog } from "./add-plan-dialog";
-import { DeletePlanButton } from "./delete-plan-button";
+import { PlanMembersDialog } from "./plan-members-dialog";
 import { MembershipStatus } from "@/generated/prisma/client";
 
 export default async function PlansPage() {
@@ -98,14 +98,29 @@ export default async function PlansPage() {
                   {String(plan.price)} {plan.currency}
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">{plan.maxPerDay}x</TableCell>
-                <TableCell className="hidden md:table-cell text-muted-foreground">{plan._count.memberships}</TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground">
+                  <PlanMembersDialog
+                    planId={plan.id}
+                    planName={plan.name}
+                    activeCount={plan._count.memberships}
+                    totalCount={totalByPlan.get(plan.id) ?? 0}
+                    trigger="count"
+                  />
+                </TableCell>
                 <TableCell>
                   <Badge variant={plan.isActive ? "default" : "secondary"}>
                     {plan.isActive ? "Aktivan" : "Neaktivan"}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <DeletePlanButton planId={plan.id} membershipCount={totalByPlan.get(plan.id) ?? 0} />
+                  <PlanMembersDialog
+                    planId={plan.id}
+                    planName={plan.name}
+                    activeCount={plan._count.memberships}
+                    totalCount={totalByPlan.get(plan.id) ?? 0}
+                    trigger="icon"
+                    showActions
+                  />
                 </TableCell>
               </TableRow>
             ))}
