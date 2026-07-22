@@ -29,7 +29,7 @@
  */
 
 // 1 = I2C (current), 0 = HSU/UART. Change this one line to switch interfaces.
-#define NFC_USE_I2C 1
+#define NFC_USE_I2C 0
 
 #include <Arduino.h>
 #include <esp_system.h>
@@ -74,9 +74,10 @@ const int  NFC_I2C_SCL_PIN  = 33;
   PN532 nfc(pn532hsu);
 #endif
 
-// Brings up the bus the PN532 sits on. For HSU the pins are re-applied AFTER
-// nfc.begin(), because PN532_HSU::begin() calls Serial2.begin(115200) with the
-// default pins and would otherwise clobber our configuration.
+// Brings up the bus the PN532 sits on. Mirrors the known-good firmware exactly:
+// set the Serial2 pins, then nfc.begin() — nothing after it. (The earlier
+// second Serial2.begin() was a defensive no-op on classic ESP32, where Serial2
+// already defaults to 16/17, and it risked disrupting the just-started reader.)
 void nfcBusBegin() {
 #if NFC_USE_I2C
   Wire.begin(NFC_I2C_SDA_PIN, NFC_I2C_SCL_PIN);
@@ -84,7 +85,6 @@ void nfcBusBegin() {
 #else
   Serial2.begin(115200, SERIAL_8N1, NFC_UART_RX_PIN, NFC_UART_TX_PIN);
   nfc.begin();
-  Serial2.begin(115200, SERIAL_8N1, NFC_UART_RX_PIN, NFC_UART_TX_PIN);
 #endif
   delay(200); // give the reader a moment to wake before probing
 }
