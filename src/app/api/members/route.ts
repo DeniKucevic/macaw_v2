@@ -99,21 +99,6 @@ export async function POST(req: NextRequest) {
     if (existing) return err(`Korisničko ime „${handle}" je već zauzeto`, 409);
   }
 
-  // A phone number is unique per person, so it's the strongest dedup signal.
-  // This block is non-overridable: two different people never share a number.
-  if (phone) {
-    const samePhone = await db.user.findFirst({
-      where: { gymId: owner.gymId, phone },
-      select: { id: true, name: true },
-    });
-    if (samePhone) {
-      return err(
-        `Član „${samePhone.name}" već koristi ovaj broj telefona`,
-        409
-      );
-    }
-  }
-
   // A name match is only a soft signal (people share names), so the client can
   // confirm and re-submit with force:true. Surfaces likely duplicates.
   if (!force) {

@@ -16,6 +16,7 @@ import { AddDeviceDialog } from "./add-device-dialog";
 import { AdminDoorOpenButton } from "./admin-door-open";
 import { formatDistanceToNow } from "date-fns";
 import { fmtLogTime, DEFAULT_TZ } from "@/lib/time";
+import { isDeviceOnline } from "@/lib/device";
 
 export default async function DevicesPage() {
   const session = await getSession();
@@ -76,12 +77,14 @@ export default async function DevicesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {devices.map((device) => (
+            {devices.map((device) => {
+              const online = isDeviceOnline(device.lastSeenAt);
+              return (
               <TableRow key={device.id}>
                 <TableCell className="font-medium">{device.name}</TableCell>
                 <TableCell>
-                  <Badge variant={device.isOnline ? "default" : "secondary"}>
-                    {device.isOnline ? "Online" : "Offline"}
+                  <Badge variant={online ? "default" : "secondary"}>
+                    {online ? "Online" : "Offline"}
                   </Badge>
                 </TableCell>
                 <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
@@ -98,7 +101,8 @@ export default async function DevicesPage() {
                   <AdminDoorOpenButton deviceId={device.id} />
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
             {devices.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground py-12">

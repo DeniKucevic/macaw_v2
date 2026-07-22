@@ -13,7 +13,7 @@ import { Role } from "@/generated/prisma/client";
 import bcrypt from "bcryptjs";
 import { logAudit } from "@/lib/audit";
 
-const ResetSchema = z.object({ password: z.string().min(6) });
+const ResetSchema = z.object({ password: z.string().min(4) });
 
 export async function POST(
   req: NextRequest,

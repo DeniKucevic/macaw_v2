@@ -1,0 +1,30 @@
+# Pings the device-offline check every ~5 minutes so an unplugged/crashed door
+# controller is detected (and a Discord alert sent) in minutes instead of once a
+# day. Vercel Hobby crons only run daily, so this fills the gap for free.
+#
+# Requires two repository secrets (Settings → Secrets and variables → Actions):
+#   APP_URL      e.g. https://www.fitnessm.rs   (no trailing slash)
+#   CRON_SECRET  the same value as the CRON_SECRET env var on Vercel
+#
+# Note: GitHub's scheduled runs can be delayed several minutes under load and
+# the minimum interval is 5 min — fine for an offline alert. For punctual checks
+# instead, point cron-job.org at the same URL with the same Bearer header.
+name: device-check
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {} # allows a manual run from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit device-check endpoint
+        run: |
+          code=$(curl -sS -o /tmp/out.txt -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/device-check")
+          echo "HTTP $code"
+          cat /tmp/out.txt
+          test "$code" = "200"

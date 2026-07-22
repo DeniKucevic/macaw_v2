@@ -5,11 +5,18 @@ import { getSession } from "@/lib/session";
 import { ok, err, unauthorized, forbidden, notFound } from "@/lib/api-helpers";
 import { Role } from "@/generated/prisma/client";
 import { logAudit } from "@/lib/audit";
+import { looksLikeEmail, normalizeUsername } from "@/lib/username";
 
 const UpdateMemberSchema = z.object({
   name: z.string().min(1).optional(),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v.trim() || null)),
   role: z.enum(["MEMBER", "STAFF"]).optional(),
+  // The login handle: an email (has "@") or a username. Optional here — only
+  // present when staff is changing how the member signs in.
+  identifier: z.string().min(1).optional(),
 });
 
 async function getStaffUser(sessionUserId: string) {
@@ -78,13 +85,51 @@ export async function PUT(
   const parsed = UpdateMemberSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.message);
 
+  const { identifier, ...rest } = parsed.data;
+  const data: {
+    name?: string;
+    phone?: string | null;
+    role?: "MEMBER" | "STAFF";
+    email?: string | null;
+    username?: string | null;
+    displayUsername?: string | null;
+  } = { ...rest };
+
+  // Changing the login handle: route to the email or username column (clearing
+  // the other), enforcing uniqueness against everyone except this member.
+  let handleChanged = false;
+  if (identifier !== undefined) {
+    const handle = identifier.trim();
+    if (looksLikeEmail(handle)) {
+      const email = handle.toLowerCase();
+      const clash = await db.user.findFirst({ where: { email, id: { not: id } }, select: { id: true } });
+      if (clash) return err("Član sa ovom email adresom već postoji", 409);
+      data.email = email;
+      data.username = null;
+      data.displayUsername = null;
+    } else {
+      const username = normalizeUsername(handle);
+      if (username.length < 3) {
+        return err("Korisničko ime mora imati bar 3 znaka (slova, brojevi, . _ -)", 400);
+      }
+      const clash = await db.user.findFirst({ where: { username, id: { not: id } }, select: { id: true } });
+      if (clash) return err(`Korisničko ime „${handle}" je već zauzeto`, 409);
+      data.username = username;
+      data.displayUsername = handle;
+      data.email = null;
+    }
+    handleChanged = true;
+  }
+
   const updated = await db.user.update({
     where: { id },
-    data: parsed.data,
+    data,
     select: {
       id: true,
       name: true,
       email: true,
+      username: true,
+      displayUsername: true,
       phone: true,
       role: true,
       updatedAt: true,
@@ -100,7 +145,11 @@ export async function PUT(
     targetType: "User",
     targetId: id,
     targetLabel: updated.name,
-    details: roleChanged ? { from: target.role, to: parsed.data.role } : { ...parsed.data },
+    details: roleChanged
+      ? { from: target.role, to: parsed.data.role }
+      : handleChanged
+        ? { handle: updated.email ?? updated.displayUsername }
+        : { ...rest },
   });
 
   return ok(updated);

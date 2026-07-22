@@ -17,6 +17,7 @@ import { ManualEntryButton } from "./manual-entry-button";
 import { EditMembershipDialog } from "./edit-membership-dialog";
 import { RfidSection } from "./rfid-section";
 import { ResetPasswordButton } from "./reset-password-button";
+import { EditLoginDialog } from "./edit-login-dialog";
 import { MembershipStatus } from "@/generated/prisma/client";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -165,6 +166,13 @@ export default async function MemberDetailPage({
 
       {/* RFID kartice */}
       <RfidSection memberId={member.id} initialTags={member.rfidTags} deviceId={device?.id ?? null} />
+
+      {/* Prijava (email / korisničko ime) */}
+      <EditLoginDialog
+        memberId={member.id}
+        memberName={member.name}
+        currentHandle={member.email ?? member.displayUsername}
+      />
 
       {/* Lozinka */}
       <ResetPasswordButton memberId={member.id} memberName={member.name} />

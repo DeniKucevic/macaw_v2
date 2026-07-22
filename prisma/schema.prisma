@@ -73,10 +73,6 @@ model User {
   doorRequests DoorRequest[]
 
   @@unique([gymId, pin])
-  // A phone number identifies a real person, so it must be unique within a gym.
-  // This is the practical dedup key when email/username are optional. Postgres
-  // treats NULLs as distinct, so any number of members without a phone is fine.
-  @@unique([gymId, phone])
 }
 
 enum Role {

@@ -30,8 +30,8 @@ export function ResetPasswordButton({ memberId, memberName }: Props) {
 
   async function handleReset() {
     setError("");
-    if (password.length < 6) {
-      setError("Lozinka mora imati najmanje 6 znakova.");
+    if (password.length < 4) {
+      setError("Lozinka mora imati najmanje 4 znaka.");
       return;
     }
     setLoading(true);
@@ -84,7 +84,7 @@ export function ResetPasswordButton({ memberId, memberName }: Props) {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Najmanje 6 znakova"
+                placeholder="Najmanje 4 znaka"
               />
               {error && <p className="text-sm text-destructive">{error}</p>}
               {done && (
