@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { DateInput, todayISO } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
+import { planDurationLabel } from "@/lib/plan";
 import { Plus } from "lucide-react";
 
 interface Plan {
@@ -27,6 +28,7 @@ interface Plan {
   name: string;
   type: string;
   durationDays: number | null;
+  durationMonths: number | null;
   sessionCount: number | null;
   price: unknown;
   currency: string;
@@ -91,10 +93,7 @@ export function AssignMembershipDialog({ memberId, plans }: Props) {
               <SelectContent>
                 {plans.map((plan) => (
                   <SelectItem key={plan.id} value={plan.id}>
-                    {plan.name} —{" "}
-                    {plan.type === "TIME_BASED"
-                      ? `${plan.durationDays} dana`
-                      : `${plan.sessionCount} treninga`}
+                    {plan.name} — {planDurationLabel(plan)}
                     {" · "}{String(plan.price)} {plan.currency}
                   </SelectItem>
                 ))}
@@ -104,7 +103,7 @@ export function AssignMembershipDialog({ memberId, plans }: Props) {
           {selectedPlan && (
             <div className="text-sm text-muted-foreground bg-muted rounded px-3 py-2">
               {selectedPlan.type === "TIME_BASED"
-                ? `Vremenski: ističe ${selectedPlan.durationDays} dana od početka`
+                ? `Vremenski: traje ${planDurationLabel(selectedPlan)} od početka`
                 : `Po treninzima: ${selectedPlan.sessionCount} treninga uključeno`}
             </div>
           )}

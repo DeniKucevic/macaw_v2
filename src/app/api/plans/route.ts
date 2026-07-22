@@ -10,6 +10,7 @@ const CreatePlanSchema = z.object({
   description: z.string().optional(),
   type: z.enum(["TIME_BASED", "SESSION_BASED"]),
   durationDays: z.number().int().positive().optional(),
+  durationMonths: z.number().int().positive().optional(),
   sessionCount: z.number().int().positive().optional(),
   price: z.number().nonnegative(),
   currency: z.string().length(3).default("RSD"),
@@ -43,9 +44,12 @@ export async function POST(req: NextRequest) {
   const parsed = CreatePlanSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.message);
 
-  const { type, durationDays, sessionCount } = parsed.data;
-  if (type === "TIME_BASED" && !durationDays) {
-    return err("durationDays required for TIME_BASED plans");
+  const { type, durationDays, durationMonths, sessionCount } = parsed.data;
+  if (type === "TIME_BASED" && !durationDays && !durationMonths) {
+    return err("durationDays ili durationMonths je obavezno za vremenske planove");
+  }
+  if (type === "TIME_BASED" && durationDays && durationMonths) {
+    return err("Postavi trajanje u danima ILI mesecima, ne oba");
   }
   if (type === "SESSION_BASED" && !sessionCount) {
     return err("sessionCount required for SESSION_BASED plans");

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { AddPlanDialog } from "./add-plan-dialog";
 import { PlanMembersDialog } from "./plan-members-dialog";
+import { planDurationLabel } from "@/lib/plan";
 import { MembershipStatus } from "@/generated/prisma/client";
 
 export default async function PlansPage() {
@@ -90,9 +91,7 @@ export default async function PlansPage() {
                   </Badge>
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
-                  {plan.type === "TIME_BASED"
-                    ? `${plan.durationDays} dana`
-                    : `${plan.sessionCount} treninga`}
+                  {planDurationLabel(plan)}
                 </TableCell>
                 <TableCell className="font-medium">
                   {String(plan.price)} {plan.currency}

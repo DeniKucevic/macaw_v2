@@ -31,7 +31,8 @@ export function AddPlanDialog() {
     name: "",
     description: "",
     type: "TIME_BASED",
-    durationDays: "30",
+    durationValue: "1",
+    durationUnit: "months", // "months" | "days"
     sessionCount: "10",
     price: "",
     currency: "RSD",
@@ -55,7 +56,9 @@ export function AddPlanDialog() {
       currency: form.currency,
       maxPerDay: parseInt(form.maxPerDay),
       ...(form.type === "TIME_BASED"
-        ? { durationDays: parseInt(form.durationDays) }
+        ? form.durationUnit === "months"
+          ? { durationMonths: parseInt(form.durationValue) }
+          : { durationDays: parseInt(form.durationValue) }
         : { sessionCount: parseInt(form.sessionCount) }),
     };
 
@@ -108,8 +111,24 @@ export function AddPlanDialog() {
             <div className="space-y-1">
               {form.type === "TIME_BASED" ? (
                 <>
-                  <Label>Trajanje (dani)</Label>
-                  <Input type="number" min="1" value={form.durationDays} onChange={(e) => set("durationDays", e.target.value)} required />
+                  <Label>Trajanje</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      className="w-20"
+                      value={form.durationValue}
+                      onChange={(e) => set("durationValue", e.target.value)}
+                      required
+                    />
+                    <Select value={form.durationUnit} onValueChange={(v) => set("durationUnit", v)}>
+                      <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="months">meseci</SelectItem>
+                        <SelectItem value="days">dana</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </>
               ) : (
                 <>
@@ -119,6 +138,12 @@ export function AddPlanDialog() {
               )}
             </div>
           </div>
+          {form.type === "TIME_BASED" && form.durationUnit === "months" && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              Ističe istog datuma narednog meseca (npr. 15.1 → 15.2). Ako taj dan ne
+              postoji, prelazi na poslednji dan meseca.
+            </p>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 space-y-1">
               <Label>Cena</Label>

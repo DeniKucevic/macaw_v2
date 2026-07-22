@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { ok, err, unauthorized, forbidden, notFound } from "@/lib/api-helpers";
 import { Role } from "@/generated/prisma/client";
-import { addDays } from "date-fns";
+import { membershipExpiry } from "@/lib/plan";
 import { logAudit } from "@/lib/audit";
 
 const CreateMembershipSchema = z.object({
@@ -73,10 +73,7 @@ export async function POST(req: NextRequest) {
   const plan = await db.membershipPlan.findUnique({ where: { id: planId } });
   if (!plan || plan.gymId !== staff.gymId) return notFound("Plan");
 
-  const expiresAt =
-    plan.type === "TIME_BASED" && plan.durationDays
-      ? addDays(startsAt, plan.durationDays)
-      : null;
+  const expiresAt = membershipExpiry(startsAt, plan);
 
   const membership = await db.membership.create({
     data: {

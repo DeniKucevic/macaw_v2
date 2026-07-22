@@ -128,8 +128,11 @@ model MembershipPlan {
   name         String
   description  String?
   type         PlanType
-  // TIME_BASED: number of calendar days the membership lasts
-  durationDays Int?
+  // TIME_BASED lasts either a fixed number of days OR whole calendar months
+  // (exactly one is set). Months expire on the same day-of-month via addMonths,
+  // which clamps end-of-month (31 Jan + 1mo = 28/29 Feb) — a true "monthly".
+  durationDays   Int?
+  durationMonths Int?
   // SESSION_BASED: total sessions included
   sessionCount Int?
   price        Decimal  @db.Decimal(10, 2)
