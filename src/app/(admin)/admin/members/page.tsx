@@ -60,6 +60,8 @@ export default async function MembersPage({
               { name: { contains: search, mode: "insensitive" } },
               { email: { contains: search, mode: "insensitive" } },
               { phone: { contains: search, mode: "insensitive" } },
+              // Find a member by their RFID card id (e.g. from the device log).
+              { rfidTags: { some: { tagId: { contains: search, mode: "insensitive" } } } },
             ],
           }
         : {}),

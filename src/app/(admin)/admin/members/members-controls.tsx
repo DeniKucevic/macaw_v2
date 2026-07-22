@@ -38,7 +38,7 @@ export function MembersControls() {
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Pretraži po imenu, emailu ili telefonu…"
+          placeholder="Pretraži po imenu, emailu, telefonu ili kartici…"
           className="max-w-sm"
         />
       </form>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
@@ -37,6 +38,15 @@ export default async function DevicesPage() {
     take: 50,
     include: { device: { select: { name: true } } },
   });
+
+  // Map card UID -> member, so a SCAN log shows WHO tapped, not just a hex id.
+  const tags = await db.rfidTag.findMany({
+    where: { user: { gymId: user.gymId } },
+    select: { tagId: true, userId: true, user: { select: { name: true } } },
+  });
+  const tagOwner = new Map(
+    tags.map((t) => [t.tagId.toUpperCase(), { id: t.userId, name: t.user.name }])
+  );
 
   const levelVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     ERROR: "destructive",
@@ -114,18 +124,38 @@ export default async function DevicesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="text-xs font-mono whitespace-nowrap">
-                    {fmtLogTime(log.createdAt, tz)}
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell text-sm">{log.device.name}</TableCell>
-                  <TableCell>
-                    <Badge variant={levelVariant[log.level] ?? "outline"}>{log.level}</Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{log.message}</TableCell>
-                </TableRow>
-              ))}
+              {logs.map((log) => {
+                const owner = log.tagId ? tagOwner.get(log.tagId.toUpperCase()) : undefined;
+                return (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-xs font-mono whitespace-nowrap">
+                      {fmtLogTime(log.createdAt, tz)}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell text-sm">{log.device.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={levelVariant[log.level] ?? "outline"}>{log.level}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {log.message}
+                      {log.tagId && (
+                        owner ? (
+                          <>
+                            {" — "}
+                            <Link
+                              href={`/admin/members/${owner.id}`}
+                              className="font-medium text-foreground hover:text-brand transition-colors"
+                            >
+                              {owner.name}
+                            </Link>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground"> — nepoznata kartica</span>
+                        )
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {logs.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center text-muted-foreground py-10">

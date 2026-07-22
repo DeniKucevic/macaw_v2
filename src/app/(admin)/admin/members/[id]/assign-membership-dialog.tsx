@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DateInput } from "@/components/ui/date-input";
+import { DateInput, todayISO } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
 
@@ -43,7 +43,7 @@ export function AssignMembershipDialog({ memberId, plans }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [planId, setPlanId] = useState("");
-  const [startsAt, setStartsAt] = useState(new Date().toISOString().split("T")[0]);
+  const [startsAt, setStartsAt] = useState(todayISO());
   const [notes, setNotes] = useState("");
 
   const selectedPlan = plans.find((p) => p.id === planId);
