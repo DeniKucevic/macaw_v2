@@ -1,36 +1,24 @@
 /**
  * Macaw ESP32 Firmware
- * Hardware: ESP32-WROOM-32U + Elechouse NFC Module V3 (PN532)
+ * Hardware: ESP32-WROOM-32 (38-pin) + Elechouse NFC Module V3 (PN532), I2C
  *
- * ── PN532 interface: currently I2C ───────────────────────────────────────────
- * The module's 4-pin header (VCC/GND/SDA/SCL) works for BOTH modes — in HSU the
- * SDA pin is the module's TX and SCL is its RX. Switch with NFC_USE_I2C below
- * and set the DIP switches to match. ALWAYS verify against the table printed on
- * the board — if the switches and the code disagree, you get "PN532 not found".
+ * ── PN532 wiring (I2C) ───────────────────────────────────────────────────────
+ *   DIP switches: SET0 = ON, SET1 = OFF   (verify against the table on the board)
+ *   Module SDA → GPIO21    Module SCL → GPIO22
+ *   Module VCC → 3.3V  (keep 3.3V — the module's I2C pull-ups tie SDA/SCL to VCC,
+ *                       and the ESP32's pins are not 5V tolerant)
+ *   Module GND → GND    (must share ground with the ESP32)
+ *   Relay IN   → GPIO4
  *
- *   Mode      SET0   SET1     Wiring (module → ESP32)
- *   --------  -----  -----    ------------------------------------------------
- *   I2C  ◄──  ON     OFF      SDA     → GPIO32,        SCL     → GPIO33
- *   HSU/UART  OFF    OFF      SDA(TX) → GPIO16 (RX2),  SCL(RX) → GPIO17 (TX2)
+ * Uses the maintained Adafruit_PN532 library (I2C). The older Elechouse
+ * PN532_HSU library does NOT initialise on Arduino-ESP32 core 3.x, which is
+ * what "PN532 not found" turned out to be. Build with core 2.0.17 OR (as here)
+ * the Adafruit library on 3.x.
  *
- *   (I2C pins are configurable — see NFC_I2C_SDA_PIN / NFC_I2C_SCL_PIN below.)
- *
- * I2C is preferred here: there is no TX/RX crossing to get wrong (the most
- * common cause of "not found" on HSU), and SDA/SCL match the header labels 1:1.
- *
- *   NFC VCC → 3.3V  (keep 3.3V on I2C — the module's pull-ups tie SDA/SCL to
- *                    VCC, and the ESP32's pins are not 5V tolerant)
- *   NFC GND → GND    (must share ground with the ESP32)
- *   Relay IN → GPIO4
- *
- * Libraries:
- *   - Elechouse PN532 (manual install from GitHub)
+ * Libraries (Library Manager):
+ *   - Adafruit PN532   (pulls in Adafruit BusIO)
  *   - ArduinoJson by Benoit Blanchon
  */
-
-// 1 = I2C (current), 0 = HSU/UART. Change this one line to switch interfaces.
-#define NFC_USE_I2C 0
-
 #include <Arduino.h>
 #include <esp_system.h>
 #include <Preferences.h>
@@ -40,13 +28,8 @@
 #include <HTTPClient.h>
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
-#include <PN532.h>
-#if NFC_USE_I2C
-  #include <Wire.h>
-  #include <PN532_I2C.h>
-#else
-  #include <PN532_HSU.h>
-#endif
+#include <Wire.h>
+#include <Adafruit_PN532.h> // maintained lib, works on ESP32 core 3.x (I2C)
 #include "config.h"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -55,41 +38,26 @@ const bool RELAY_ACTIVE_LOW = false;
 const int  DOOR_OPEN_MS     = 1000;
 const int  POLL_TIMEOUT_MS  = 9000; // server holds 8s, we allow 9s before retry
 
-// PN532 pins
-const int  NFC_UART_RX_PIN  = 16; // ESP32 RX2  ← module SDA/TX
-const int  NFC_UART_TX_PIN  = 17; // ESP32 TX2  → module SCL/RX
-// I2C can live on almost any GPIO thanks to the ESP32's GPIO matrix — these are
-// just the two we picked. Safe alternatives if the board layout suits you better:
-// 25/26, 26/27, 13/14, 18/19, 21/22. AVOID: 6-11 (flash), 34-39 (input-only, so
-// they can't drive SDA), 0/2/12/15 (boot strapping), 1/3 (USB serial), 4 (relay).
-const int  NFC_I2C_SDA_PIN  = 32;
-const int  NFC_I2C_SCL_PIN  = 33;
+// PN532 over I2C. DIP switches: SET0 ON, SET1 OFF.
+// Wire: SDA -> GPIO21, SCL -> GPIO22, VCC -> 3.3V, GND -> GND (shared).
+const int  NFC_I2C_SDA_PIN  = 21;
+const int  NFC_I2C_SCL_PIN  = 22;
+// IRQ/RESET aren't on the module's 4-pin header; the library polls the bus in
+// I2C mode, so these are placeholders the constructor requires.
+const int  NFC_IRQ_PIN      = 4;
+const int  NFC_RESET_PIN    = 5;
 
 // ─── NFC ──────────────────────────────────────────────────────────────────────
-#if NFC_USE_I2C
-  PN532_I2C pn532i2c(Wire);
-  PN532 nfc(pn532i2c);
-#else
-  PN532_HSU pn532hsu(Serial2);
-  PN532 nfc(pn532hsu);
-#endif
+Adafruit_PN532 nfc(NFC_IRQ_PIN, NFC_RESET_PIN);
 
-// Brings up the bus the PN532 sits on. Mirrors the known-good firmware exactly:
-// set the Serial2 pins, then nfc.begin() — nothing after it. (The earlier
-// second Serial2.begin() was a defensive no-op on classic ESP32, where Serial2
-// already defaults to 16/17, and it risked disrupting the just-started reader.)
+// Brings up the I2C bus + reader. Same call sequence as the bench sketch that
+// worked: Wire.begin(pins) then nfc.begin().
 void nfcBusBegin() {
-#if NFC_USE_I2C
   Wire.begin(NFC_I2C_SDA_PIN, NFC_I2C_SCL_PIN);
   nfc.begin();
-#else
-  Serial2.begin(115200, SERIAL_8N1, NFC_UART_RX_PIN, NFC_UART_TX_PIN);
-  nfc.begin();
-#endif
   delay(200); // give the reader a moment to wake before probing
 }
 
-#if NFC_USE_I2C
 // Diagnostic: lists every device that ACKs on the bus. This separates "the
 // wiring/power/DIP switches are wrong" (nothing answers at all) from "the
 // module is talking but the driver is unhappy" (0x24 shows up).
@@ -113,7 +81,6 @@ void i2cScan() {
     Serial.println("[I2C]      4) SDA/SCL on the pins the sketch prints above");
   }
 }
-#endif
 
 // Why did we just boot? A repeating "PANIC"/"BROWNOUT"/watchdog here means the
 // board is crash-looping — which looks like a reader fault but isn't one.
@@ -489,18 +456,12 @@ void nfcTask(void* param) {
     nfcBusBegin();
     ver = nfc.getFirmwareVersion();
     if (!ver) {
-#if NFC_USE_I2C
-      Serial.printf("[NFC] attempt %d: PN532 not found (I2C on SDA=%d SCL=%d) | heap %u — retrying in 5s\n",
+      Serial.printf("[NFC] attempt %d: PN532 not found (I2C SDA=%d SCL=%d) | heap %u — retrying in 5s\n",
         attempt, NFC_I2C_SDA_PIN, NFC_I2C_SCL_PIN, (unsigned)ESP.getFreeHeap());
       i2cScan();
-#else
-      Serial.printf("[NFC] attempt %d: PN532 not found (HSU on RX=%d TX=%d) | heap %u — retrying in 5s\n",
-        attempt, NFC_UART_RX_PIN, NFC_UART_TX_PIN, (unsigned)ESP.getFreeHeap());
-#endif
       if (!reportedMissing) { // log once, not every retry
-        logToServer("ERROR", NFC_USE_I2C
-          ? "PN532 not found on I2C (check DIP SET0=ON/SET1=OFF, SDA=21, SCL=22, power)"
-          : "PN532 not found on HSU (check DIP both OFF, TX/RX crossed on 16/17, power)");
+        logToServer("ERROR",
+          "PN532 not found on I2C (check DIP SET0=ON/SET1=OFF, SDA=21, SCL=22, power)");
         reportedMissing = true;
       }
       vTaskDelay(pdMS_TO_TICKS(5000));
@@ -510,7 +471,7 @@ void nfcTask(void* param) {
   char verMsg[48];
   snprintf(verMsg, sizeof(verMsg), "PN532 firmware v%d.%d ready",
     (int)((ver >> 16) & 0xFF), (int)((ver >> 8) & 0xFF));
-  Serial.printf("[NFC] %s (%s)\n", verMsg, NFC_USE_I2C ? "I2C" : "HSU");
+  Serial.printf("[NFC] %s\n", verMsg);
   logToServer("INFO", verMsg);
   nfc.SAMConfig();
 
