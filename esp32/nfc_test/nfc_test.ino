@@ -1,18 +1,13 @@
 /**
- * PN532 bring-up test — HSU, minimal.
+ * PN532 HSU init probe — finds which init your installed library/core responds
+ * to, and prints the core version. No WiFi, no relay, no TLS.
  *
- * This reproduces EXACTLY the reader init from the last firmware that worked
- * (commit 16ee7e7): PN532_HSU on Serial2, pins 16/17, nothing added. No WiFi,
- * no relay, no I2C. If this finds the reader, the module + wiring are fine and
- * the fault was in later firmware changes.
+ * Newer Arduino-ESP32 cores (3.x) changed HardwareSerial pin handling, which
+ * can break a PN532_HSU init that worked on 2.x. This tries four variants and
+ * reports the winner (or none), plus the core version so we know the ground.
  *
- *   DIP switches: HSU/UART = SET0 OFF, SET1 OFF  (both OFF)
- *   Wiring (module → ESP32):
- *     SDA (module TX) → GPIO16  (ESP32 RX2)
- *     SCL (module RX) → GPIO17  (ESP32 TX2)   <-- crossed: module TX→ESP RX
- *     VCC → 3.3V     GND → GND (shared with the ESP32)
- *
- * Serial Monitor: 115200
+ *   DIP switches: BOTH OFF (HSU). Wire module SDA->GPIO16, SCL->GPIO17 (crossed),
+ *   VCC->3.3V, GND->GND (shared). Serial Monitor: 115200.
  */
 #include <Arduino.h>
 #include <PN532_HSU.h>
@@ -21,51 +16,78 @@
 PN532_HSU pn532hsu(Serial2);
 PN532 nfc(pn532hsu);
 
-bool found = false;
+const char* VARIANT[] = {
+  "",
+  "V1 Serial2.begin(16,17) then nfc.begin()   [the original]",
+  "V2 begin, then RE-APPLY pins after nfc.begin()",
+  "V3 nfc.begin() only (pure library default)",
+  "V4 swapped pins: Serial2.begin(17,16)"
+};
 
-bool probe() {
-  // Exactly as the working firmware did it — set the pins, begin, then ask.
-  Serial2.begin(115200, SERIAL_8N1, 16, 17);
-  nfc.begin();
-  uint32_t v = nfc.getFirmwareVersion();
-  if (!v) return false;
-  Serial.printf("\n*** PN532 FOUND — firmware v%d.%d ***\n",
-    (int)((v >> 16) & 0xFF), (int)((v >> 8) & 0xFF));
-  nfc.SAMConfig();
-  return true;
+uint32_t tryVariant(int v) {
+  switch (v) {
+    case 1:
+      Serial2.begin(115200, SERIAL_8N1, 16, 17);
+      nfc.begin();
+      break;
+    case 2:
+      Serial2.begin(115200, SERIAL_8N1, 16, 17);
+      nfc.begin();
+      Serial2.begin(115200, SERIAL_8N1, 16, 17);
+      break;
+    case 3:
+      nfc.begin();
+      break;
+    case 4:
+      Serial2.begin(115200, SERIAL_8N1, 17, 16);
+      nfc.begin();
+      break;
+  }
+  delay(250);
+  return nfc.getFirmwareVersion();
 }
+
+int winner = 0;
 
 void setup() {
   Serial.begin(115200);
-  delay(800);
-  Serial.println("\n\n=== PN532 HSU bring-up (matches the known-good init) ===");
-  Serial.println("DIP: BOTH OFF | wire module SDA->GPIO16, SCL->GPIO17 (crossed)");
+  delay(1000);
+  Serial.println("\n\n=== PN532 HSU init probe ===");
+#ifdef ESP_ARDUINO_VERSION_STR
+  Serial.printf("Arduino-ESP32 core: %s\n", ESP_ARDUINO_VERSION_STR);
+#else
+  Serial.println("Arduino-ESP32 core: older than 2.0 (no version macro)");
+#endif
   Serial.printf("free heap: %u\n\n", (unsigned)ESP.getFreeHeap());
 
-  found = probe();
-  if (found) {
-    Serial.println("Ready — tap a card.\n");
+  for (int v = 1; v <= 4; v++) {
+    Serial.printf("Trying %s ...\n", VARIANT[v]);
+    uint32_t ver = tryVariant(v);
+    if (ver) {
+      Serial.printf("   >>> FOUND! firmware v%d.%d <<<\n",
+        (int)((ver >> 16) & 0xFF), (int)((ver >> 8) & 0xFF));
+      winner = v;
+      break;
+    }
+    Serial.println("   no response");
+    delay(500);
+  }
+
+  Serial.println();
+  if (winner) {
+    Serial.printf("*** WINNER: %s ***\n", VARIANT[winner]);
+    nfc.SAMConfig();
+    Serial.println("Tap a card...\n");
   } else {
-    Serial.println("Not found yet — will retry every 3s.");
-    Serial.println("Fix live (no reflash needed):");
-    Serial.println("  * DIP switches BOTH OFF (this is HSU mode)");
-    Serial.println("  * measure 3.3V across the module's VCC/GND");
-    Serial.println("  * GND shared with the ESP32");
-    Serial.println("  * SDA->16 and SCL->17 (try swapping these two once)");
-    Serial.println();
+    Serial.println("--- No init worked. Send me the 'core:' line above.");
+    Serial.println("    If the core is fine, it's hardware: measure 3.3V at the");
+    Serial.println("    module VCC/GND, confirm shared GND, try other wires/module.\n");
   }
 }
 
 void loop() {
-  if (!found) {
-    delay(3000);
-    Serial.println("retrying HSU...");
-    if (probe()) { found = true; Serial.println("Ready — tap a card.\n"); }
-    return;
-  }
-
-  uint8_t uid[7];
-  uint8_t uidLen = 0;
+  if (!winner) { delay(2000); return; }
+  uint8_t uid[7], uidLen = 0;
   if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, 500) && uidLen > 0) {
     String tag;
     for (uint8_t i = 0; i < uidLen; i++) {
@@ -73,7 +95,7 @@ void loop() {
       tag += String(uid[i], HEX);
     }
     tag.toUpperCase();
-    Serial.printf("[CARD] %s  (%d bytes)\n", tag.c_str(), uidLen);
+    Serial.printf("[CARD] %s\n", tag.c_str());
     delay(1500);
   }
 }
