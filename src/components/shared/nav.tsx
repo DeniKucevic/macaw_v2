@@ -97,7 +97,7 @@ export function Nav({ role }: NavProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <div className="px-2 py-1.5 text-sm font-medium">{session?.user?.name}</div>
-            <div className="px-2 pb-1.5 text-xs text-muted-foreground">{session?.user?.email}</div>
+            <div className="px-2 pb-1.5 text-xs text-muted-foreground">{session?.user?.email ?? session?.user?.displayUsername ?? session?.user?.username}</div>
             <DropdownMenuSeparator />
             {isAdmin && (
               <DropdownMenuItem asChild>

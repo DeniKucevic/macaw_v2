@@ -48,10 +48,16 @@ model AuditLog {
 model User {
   id            String   @id @default(cuid())
   name          String
-  email         String   @unique
-  emailVerified Boolean  @default(false)
-  image         String?
-  phone         String?
+  // Login identifier. A member has EITHER an email (real address) OR a
+  // username (no @) — both optional at the column level, unique when present,
+  // and the app requires exactly one on create. better-auth's username plugin
+  // owns `username` (normalized lowercase) and `displayUsername` (original case).
+  email           String?  @unique
+  emailVerified   Boolean  @default(false)
+  username        String?  @unique
+  displayUsername String?
+  image           String?
+  phone           String?
   role          Role     @default(MEMBER)
   gymId         String
   pin           String?  // plaintext 6-digit PIN for door entry (unique per gym)
@@ -67,6 +73,10 @@ model User {
   doorRequests DoorRequest[]
 
   @@unique([gymId, pin])
+  // A phone number identifies a real person, so it must be unique within a gym.
+  // This is the practical dedup key when email/username are optional. Postgres
+  // treats NULLs as distinct, so any number of members without a phone is fine.
+  @@unique([gymId, phone])
 }
 
 enum Role {

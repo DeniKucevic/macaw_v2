@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { StickyNote } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -59,6 +60,7 @@ export default async function MembersPage({
             OR: [
               { name: { contains: search, mode: "insensitive" } },
               { email: { contains: search, mode: "insensitive" } },
+              { username: { contains: search, mode: "insensitive" } },
               { phone: { contains: search, mode: "insensitive" } },
               // Find a member by their RFID card id (e.g. from the device log).
               { rfidTags: { some: { tagId: { contains: search, mode: "insensitive" } } } },
@@ -155,7 +157,7 @@ export default async function MembersPage({
           <TableHeader>
             <TableRow>
               <TableHead>Ime</TableHead>
-              <TableHead className="hidden md:table-cell">Email</TableHead>
+              <TableHead className="hidden md:table-cell">Prijava</TableHead>
               <TableHead className="hidden sm:table-cell">Uloga</TableHead>
               <TableHead>Članarina</TableHead>
               <TableHead className="hidden lg:table-cell">Učlanjen</TableHead>
@@ -168,14 +170,21 @@ export default async function MembersPage({
               return (
                 <TableRow key={member.id}>
                   <TableCell className="font-medium">
-                    <Link
-                      href={`/admin/members/${member.id}`}
-                      className="hover:text-brand transition-colors"
-                    >
-                      {member.name}
-                    </Link>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Link
+                        href={`/admin/members/${member.id}`}
+                        className="hover:text-brand transition-colors"
+                      >
+                        {member.name}
+                      </Link>
+                      {activeMembership?.notes && (
+                        <span title={activeMembership.notes}>
+                          <StickyNote className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                        </span>
+                      )}
+                    </span>
                   </TableCell>
-                  <TableCell className="hidden md:table-cell text-muted-foreground">{member.email}</TableCell>
+                  <TableCell className="hidden md:table-cell text-muted-foreground">{member.email ?? member.displayUsername ?? "—"}</TableCell>
                   <TableCell className="hidden sm:table-cell">
                     <Badge variant={member.role === "MEMBER" ? "secondary" : "default"}>
                       {roleLabel[member.role] ?? member.role}

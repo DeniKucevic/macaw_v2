@@ -101,7 +101,7 @@ export default async function MemberDetailPage({
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="text-xl sm:text-2xl font-bold break-words">{member.name}</h1>
-          <p className="text-muted-foreground text-sm break-words">{member.email} · {member.phone ?? "bez telefona"}</p>
+          <p className="text-muted-foreground text-sm break-words">{member.email ?? member.displayUsername ?? "—"} · {member.phone ?? "bez telefona"}</p>
         </div>
         <Badge className="shrink-0">{roleLabel[member.role] ?? member.role}</Badge>
       </div>
@@ -150,6 +150,12 @@ export default async function MemberDetailPage({
                 <p className="text-xs text-muted-foreground">Počelo</p>
                 <p className="font-medium">{fmtDate(activeMembership.startsAt, tz)}</p>
               </div>
+              {activeMembership.notes && (
+                <div className="col-span-2 sm:col-span-4">
+                  <p className="text-xs text-muted-foreground">Napomena</p>
+                  <p className="font-medium whitespace-pre-wrap break-words">{activeMembership.notes}</p>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-muted-foreground">Nema aktivne članarine. Dodelite je pomoću dugmeta iznad.</p>

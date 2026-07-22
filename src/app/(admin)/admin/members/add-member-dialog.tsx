@@ -26,36 +26,69 @@ export function AddMemberDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ name: "", email: "", phone: "", role: "MEMBER", password: "" });
+  const [form, setForm] = useState({ name: "", identifier: "", phone: "", role: "MEMBER", password: "" });
   const [createdPin, setCreatedPin] = useState<string | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  // Set when the server finds an existing member with the same name; the user
+  // must confirm before we re-submit with force:true.
+  const [dupNames, setDupNames] = useState<
+    { id: string; name: string; phone: string | null; email: string | null; displayUsername: string | null }[] | null
+  >(null);
 
-  async function handleSubmit(e: { preventDefault(): void }) {
-    e.preventDefault();
+  async function suggestUsername() {
+    if (!form.name.trim()) {
+      setError("Prvo unesite ime da bismo predložili korisničko ime");
+      return;
+    }
+    setError("");
+    setSuggesting(true);
+    const res = await fetch(`/api/members/suggest-username?name=${encodeURIComponent(form.name)}`);
+    setSuggesting(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error ?? "Neuspešan predlog korisničkog imena");
+      return;
+    }
+    const data = await res.json();
+    setForm((f) => ({ ...f, identifier: data.username }));
+  }
+
+  async function submit(force: boolean) {
     setError("");
     setLoading(true);
 
     const res = await fetch("/api/members", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, force }),
     });
 
     setLoading(false);
 
     if (!res.ok) {
       const data = await res.json();
+      if (data.code === "DUPLICATE_NAME") {
+        setDupNames(data.existing ?? []);
+        return;
+      }
       setError(data.error ?? "Greška pri dodavanju člana");
       return;
     }
 
     const data = await res.json();
     setOpen(false);
-    setForm({ name: "", email: "", phone: "", role: "MEMBER", password: "" });
+    setDupNames(null);
+    setForm({ name: "", identifier: "", phone: "", role: "MEMBER", password: "" });
     router.refresh();
 
     if (data.pin) {
       setCreatedPin(data.pin);
     }
+  }
+
+  function handleSubmit(e: { preventDefault(): void }) {
+    e.preventDefault();
+    submit(false);
   }
 
   return (
@@ -75,20 +108,37 @@ export function AddMemberDialog() {
               <Label>Ime</Label>
               <Input
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, name: e.target.value });
+                  setDupNames(null);
+                }}
                 placeholder="Marko Marković"
                 required
               />
             </div>
             <div className="space-y-1">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="marko@primer.com"
-                required
-              />
+              <Label>Email ili korisničko ime</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={form.identifier}
+                  onChange={(e) => setForm({ ...form, identifier: e.target.value })}
+                  placeholder="marko@primer.com ili markoma"
+                  required
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={suggestUsername}
+                  disabled={suggesting}
+                  title="Predloži korisničko ime iz imena"
+                >
+                  {suggesting ? "…" : "Predloži"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Član se prijavljuje ovim. Ako nema email, koristite korisničko ime.
+              </p>
             </div>
             <div className="space-y-1">
               <Label>Lozinka</Label>
@@ -96,8 +146,8 @@ export function AddMemberDialog() {
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="Minimalno 6 karaktera"
-                minLength={6}
+                placeholder="npr. 12345 — član kasnije menja"
+                minLength={4}
                 required
               />
             </div>
@@ -123,13 +173,43 @@ export function AddMemberDialog() {
               </Select>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
+            {dupNames && (
+              <div className="rounded-md border border-orange-400/60 bg-orange-50 dark:bg-orange-950/30 p-3 text-sm space-y-2">
+                <p className="font-medium text-orange-700 dark:text-orange-400">
+                  Već postoji član sa istim imenom:
+                </p>
+                <ul className="list-disc pl-5 text-muted-foreground">
+                  {dupNames.map((d) => (
+                    <li key={d.id}>
+                      {d.name}
+                      {d.phone ? ` · ${d.phone}` : ""}
+                      {d.email ? ` · ${d.email}` : d.displayUsername ? ` · ${d.displayUsername}` : ""}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-muted-foreground">
+                  Proverite da nije ista osoba. Ako je zaista novi član, potvrdite.
+                </p>
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Otkaži
               </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? "Kreiranje…" : "Dodaj člana"}
-              </Button>
+              {dupNames ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={loading}
+                  onClick={() => submit(true)}
+                >
+                  {loading ? "Kreiranje…" : "Svejedno dodaj"}
+                </Button>
+              ) : (
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Kreiranje…" : "Dodaj člana"}
+                </Button>
+              )}
             </div>
           </form>
         </DialogContent>

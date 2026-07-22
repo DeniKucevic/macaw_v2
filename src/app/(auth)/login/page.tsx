@@ -13,7 +13,7 @@ import { Footer } from "@/components/shared/footer";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -24,11 +24,16 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const result = await signIn.email({ email, password });
+    // One field, two sign-in paths: an "@" means it's an email, otherwise it's
+    // a username (members without an email log in this way).
+    const id = identifier.trim();
+    const result = id.includes("@")
+      ? await signIn.email({ email: id, password })
+      : await signIn.username({ username: id, password });
 
     if (result.error) {
       setLoading(false);
-      setError(result.error.message ?? "Pogrešan email ili lozinka");
+      setError(result.error.message ?? "Pogrešan email/korisničko ime ili lozinka");
       return;
     }
 
@@ -52,13 +57,16 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="identifier">Email ili korisničko ime</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="vi@primer.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="vi@primer.com ili korisničko ime"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
                 autoFocus
               />

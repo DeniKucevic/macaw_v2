@@ -130,7 +130,7 @@ export async function DELETE(
     targetType: "User",
     targetId: id,
     targetLabel: target.name,
-    details: { email: target.email, role: target.role },
+    details: { handle: target.email ?? target.displayUsername, role: target.role },
   });
   return ok({ deleted: true });
 }
