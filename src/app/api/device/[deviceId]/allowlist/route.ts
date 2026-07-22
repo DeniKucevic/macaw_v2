@@ -15,8 +15,10 @@ import { MembershipStatus, Role } from "@/generated/prisma/client";
 
 const Schema = z.object({ secret: z.string().min(1) });
 
-/** How long the device may trust a cached copy before refusing offline entry. */
-export const MAX_STALE_HOURS = 24;
+/** How long the device may trust a cached copy before refusing offline entry.
+ *  72h so a weekend-long internet outage doesn't lock members out, while still
+ *  bounding how long a revoked card can outlive a revocation made while offline. */
+export const MAX_STALE_HOURS = 72;
 
 export async function POST(
   req: NextRequest,

@@ -214,7 +214,7 @@ bool allowlistHas(const String& tag) {
 bool allowlistFresh() {
   prefs.begin(NVS_NS, true);
   uint32_t at     = prefs.getUInt("allowAt", 0);
-  uint32_t staleH = prefs.getUInt("staleH", 24);
+  uint32_t staleH = prefs.getUInt("staleH", 72);
   prefs.end();
   uint32_t now = nowEpoch();
   if (!at || !now) return false;
@@ -248,7 +248,7 @@ void refreshAllowlist() {
   prefs.begin(NVS_NS, false);
   prefs.putString("allow", csv);
   prefs.putUInt("allowAt", nowEpoch());
-  prefs.putUInt("staleH", staleH ? staleH : 24);
+  prefs.putUInt("staleH", staleH ? staleH : 72);
   prefs.end();
 
   int count = csv.length() ? 1 : 0;
