@@ -170,7 +170,21 @@ export async function DELETE(
   if (!target || target.gymId !== caller.gymId) return notFound("Member");
   if (target.role === Role.OWNER) return err("Cannot delete the owner", 400);
 
-  await db.user.delete({ where: { id } });
+  // A member with any history (entries, memberships, cards, sessions, login
+  // account) can't be removed by a bare user.delete() — the foreign keys block
+  // it. Remove the dependent rows in order, in one transaction, so deleting a
+  // real member actually works. The AuditLog entry below has no FK, so the
+  // record that this member was deleted survives.
+  await db.$transaction(async (tx) => {
+    await tx.entry.deleteMany({ where: { userId: id } });
+    await tx.membership.deleteMany({ where: { userId: id } });
+    await tx.rfidTag.deleteMany({ where: { userId: id } });
+    await tx.doorRequest.deleteMany({ where: { userId: id } });
+    await tx.session.deleteMany({ where: { userId: id } });
+    await tx.account.deleteMany({ where: { userId: id } });
+    await tx.user.delete({ where: { id } });
+  });
+
   await logAudit({
     gymId: caller.gymId,
     actorId: caller.id,

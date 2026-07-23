@@ -18,6 +18,7 @@ import { EditMembershipDialog } from "./edit-membership-dialog";
 import { RfidSection } from "./rfid-section";
 import { ResetPasswordButton } from "./reset-password-button";
 import { EditLoginDialog } from "./edit-login-dialog";
+import { DeleteMemberButton } from "./delete-member-button";
 import { MembershipStatus } from "@/generated/prisma/client";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
@@ -61,6 +62,8 @@ export default async function MemberDetailPage({
         take: 30,
       },
       rfidTags: true,
+      // True totals for the delete confirmation (entries above are capped at 30).
+      _count: { select: { entries: true, memberships: true, rfidTags: true } },
     },
   });
 
@@ -214,6 +217,17 @@ export default async function MemberDetailPage({
           </TableBody>
         </Table>
       </Card>
+
+      {/* Brisanje — samo vlasnik, i nikad za drugog vlasnika */}
+      {caller.role === "OWNER" && member.role !== "OWNER" && (
+        <DeleteMemberButton
+          memberId={member.id}
+          memberName={member.name}
+          entryCount={member._count.entries}
+          membershipCount={member._count.memberships}
+          cardCount={member._count.rfidTags}
+        />
+      )}
     </div>
   );
 }
