@@ -69,8 +69,9 @@ export default async function MembersPage({
         : {}),
     },
     include: {
+      // Latest membership of ANY status, so an expired one can still show its
+      // end date instead of collapsing to "Bez članarine".
       memberships: {
-        where: { status: MembershipStatus.ACTIVE },
         include: { plan: true },
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -166,7 +167,18 @@ export default async function MembersPage({
           </TableHeader>
           <TableBody>
             {members.map((member) => {
-              const activeMembership = member.memberships[0];
+              const latest = member.memberships[0];
+              const remaining = latest ? (latest.sessionsTotal ?? 0) - (latest.sessionsUsed ?? 0) : 0;
+              // Currently valid: ACTIVE status and (time-based not past expiry).
+              const isActive =
+                !!latest &&
+                latest.status === MembershipStatus.ACTIVE &&
+                (latest.plan.type !== "TIME_BASED" ||
+                  latest.expiresAt === null ||
+                  latest.expiresAt.getTime() >= Date.now());
+              // A lapsed time-based membership still has an end date to show.
+              const expiredAt =
+                !isActive && latest?.plan.type === "TIME_BASED" ? latest.expiresAt : null;
               return (
                 <TableRow key={member.id}>
                   <TableCell className="font-medium">
@@ -177,8 +189,8 @@ export default async function MembersPage({
                       >
                         {member.name}
                       </Link>
-                      {activeMembership?.notes && (
-                        <span title={activeMembership.notes}>
+                      {latest?.notes && (
+                        <span title={latest.notes}>
                           <StickyNote className="h-3.5 w-3.5 text-orange-500 shrink-0" />
                         </span>
                       )}
@@ -191,24 +203,28 @@ export default async function MembersPage({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {activeMembership ? (
+                    {isActive ? (
                       <div className="text-sm">
-                        <span className="font-medium">{activeMembership.plan.name}</span>
-                        {activeMembership.plan.type === "SESSION_BASED" && (
+                        <span className="font-medium">{latest.plan.name}</span>
+                        {latest.plan.type === "SESSION_BASED" && (
                           <span className="text-muted-foreground ml-1">
-                            ({(activeMembership.sessionsTotal ?? 0) - (activeMembership.sessionsUsed ?? 0)} preostalo)
+                            ({remaining} preostalo)
                           </span>
                         )}
-                        {activeMembership.plan.type === "TIME_BASED" && activeMembership.expiresAt && (() => {
-                          const daysLeft = Math.ceil((activeMembership.expiresAt.getTime() - Date.now()) / 86400000);
+                        {latest.plan.type === "TIME_BASED" && latest.expiresAt && (() => {
+                          const daysLeft = Math.ceil((latest.expiresAt.getTime() - Date.now()) / 86400000);
                           const soon = daysLeft <= 7;
                           return (
                             <span className={soon ? "text-orange-500 font-medium ml-1" : "text-muted-foreground ml-1"}>
-                              (ist. {fmtDayMonth(activeMembership.expiresAt, tz)}{soon ? ` · ${daysLeft}d` : ""})
+                              (ist. {fmtDayMonth(latest.expiresAt, tz)}{soon ? ` · ${daysLeft}d` : ""})
                             </span>
                           );
                         })()}
                       </div>
+                    ) : expiredAt ? (
+                      <Badge variant="outline" className="text-muted-foreground border-destructive/40">
+                        Isteklo {fmtDate(expiredAt, tz)}
+                      </Badge>
                     ) : (
                       <Badge variant="outline" className="text-muted-foreground">Bez članarine</Badge>
                     )}
