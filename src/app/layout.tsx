@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import NextTopLoader from "nextjs-toploader";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 const geist = Geist({
@@ -35,6 +37,8 @@ export default function RootLayout({
       <body className={`${geist.variable} antialiased font-sans`}>
         <NextTopLoader showSpinner={false} />
         {children}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
