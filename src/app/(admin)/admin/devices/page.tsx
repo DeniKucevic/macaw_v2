@@ -98,7 +98,7 @@ export default async function DevicesPage() {
                   </code>
                 </TableCell>
                 <TableCell className="text-right">
-                  <AdminDoorOpenButton deviceId={device.id} />
+                  <AdminDoorOpenButton deviceId={device.id} deviceName={device.name} />
                 </TableCell>
               </TableRow>
               );

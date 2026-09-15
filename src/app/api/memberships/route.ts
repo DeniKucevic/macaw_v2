@@ -11,7 +11,6 @@ const CreateMembershipSchema = z.object({
   userId: z.string(),
   planId: z.string(),
   startsAt: z.string().optional(), // ISO date, defaults to now
-  notes: z.string().optional(),
   maxPerDayOverride: z.number().int().positive().optional(),
   // For session-based: can override session count
   sessionsOverride: z.number().int().positive().optional(),
@@ -63,7 +62,7 @@ export async function POST(req: NextRequest) {
   const parsed = CreateMembershipSchema.safeParse(body);
   if (!parsed.success) return err(parsed.error.message);
 
-  const { userId, planId, notes, maxPerDayOverride, sessionsOverride } = parsed.data;
+  const { userId, planId, maxPerDayOverride, sessionsOverride } = parsed.data;
   const startsAt = parsed.data.startsAt ? new Date(parsed.data.startsAt) : new Date();
 
   // Verify the target user belongs to the same gym
@@ -85,7 +84,6 @@ export async function POST(req: NextRequest) {
       sessionsTotal: plan.type === "SESSION_BASED" ? (sessionsOverride ?? plan.sessionCount) : null,
       sessionsUsed: plan.type === "SESSION_BASED" ? 0 : null,
       maxPerDay: maxPerDayOverride,
-      notes,
       status: "ACTIVE",
     },
     include: { plan: true, user: { select: { id: true, name: true, email: true } } },

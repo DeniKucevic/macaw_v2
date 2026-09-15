@@ -15,6 +15,7 @@ import { fmtDate, fmtDateTime, DEFAULT_TZ } from "@/lib/time";
 import { AssignMembershipDialog } from "./assign-membership-dialog";
 import { ManualEntryButton } from "./manual-entry-button";
 import { EditMembershipDialog } from "./edit-membership-dialog";
+import { EditMemberNoteDialog } from "./edit-member-note-dialog";
 import { RfidSection } from "./rfid-section";
 import { ResetPasswordButton } from "./reset-password-button";
 import { EditLoginDialog } from "./edit-login-dialog";
@@ -154,15 +155,24 @@ export default async function MemberDetailPage({
                 <p className="text-xs text-muted-foreground">Počelo</p>
                 <p className="font-medium">{fmtDate(activeMembership.startsAt, tz)}</p>
               </div>
-              {activeMembership.notes && (
-                <div className="col-span-2 sm:col-span-4">
-                  <p className="text-xs text-muted-foreground">Napomena</p>
-                  <p className="font-medium whitespace-pre-wrap break-words">{activeMembership.notes}</p>
-                </div>
-              )}
             </div>
           ) : (
             <p className="text-muted-foreground">Nema aktivne članarine. Dodelite je pomoću dugmeta iznad.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Napomena o članu — ostaje uz člana bez obzira na članarinu */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardTitle className="text-base">Napomena o članu</CardTitle>
+          <EditMemberNoteDialog memberId={member.id} note={member.note} />
+        </CardHeader>
+        <CardContent>
+          {member.note ? (
+            <p className="text-sm whitespace-pre-wrap break-words">{member.note}</p>
+          ) : (
+            <p className="text-muted-foreground text-sm">Nema napomene.</p>
           )}
         </CardContent>
       </Card>
