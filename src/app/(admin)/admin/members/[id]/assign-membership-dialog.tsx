@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DateInput, todayISO } from "@/components/ui/date-input";
-import { Textarea } from "@/components/ui/textarea";
 import { planDurationLabel } from "@/lib/plan";
 import { Plus } from "lucide-react";
 
@@ -46,7 +45,6 @@ export function AssignMembershipDialog({ memberId, plans }: Props) {
   const [error, setError] = useState("");
   const [planId, setPlanId] = useState("");
   const [startsAt, setStartsAt] = useState(todayISO());
-  const [notes, setNotes] = useState("");
 
   const selectedPlan = plans.find((p) => p.id === planId);
 
@@ -58,7 +56,7 @@ export function AssignMembershipDialog({ memberId, plans }: Props) {
     const res = await fetch("/api/memberships", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: memberId, planId, startsAt, notes }),
+      body: JSON.stringify({ userId: memberId, planId, startsAt }),
     });
 
     setLoading(false);
@@ -110,15 +108,6 @@ export function AssignMembershipDialog({ memberId, plans }: Props) {
           <div className="space-y-1">
             <Label>Počinje</Label>
             <DateInput value={startsAt} onChange={setStartsAt} required />
-          </div>
-          <div className="space-y-1">
-            <Label>Napomena (opciono)</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ref. plaćanja, posebni uslovi…"
-              rows={2}
-            />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-2 justify-end">

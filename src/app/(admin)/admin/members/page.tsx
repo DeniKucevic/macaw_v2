@@ -189,8 +189,8 @@ export default async function MembersPage({
                       >
                         {member.name}
                       </Link>
-                      {latest?.notes && (
-                        <span title={latest.notes}>
+                      {member.note && (
+                        <span title={member.note}>
                           <StickyNote className="h-3.5 w-3.5 text-orange-500 shrink-0" />
                         </span>
                       )}

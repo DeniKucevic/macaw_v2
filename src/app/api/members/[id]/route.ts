@@ -17,6 +17,11 @@ const UpdateMemberSchema = z.object({
   // The login handle: an email (has "@") or a username. Optional here — only
   // present when staff is changing how the member signs in.
   identifier: z.string().min(1).optional(),
+  // Free-text staff note. Emptying it clears the note (stored as NULL, not "").
+  note: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v.trim() || null)),
 });
 
 async function getStaffUser(sessionUserId: string) {
@@ -90,6 +95,7 @@ export async function PUT(
     name?: string;
     phone?: string | null;
     role?: "MEMBER" | "STAFF";
+    note?: string | null;
     email?: string | null;
     username?: string | null;
     displayUsername?: string | null;

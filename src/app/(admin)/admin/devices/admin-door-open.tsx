@@ -2,17 +2,27 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { DoorOpen, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 interface Props {
   deviceId: string;
+  deviceName: string;
 }
 
-export function AdminDoorOpenButton({ deviceId }: Props) {
+export function AdminDoorOpenButton({ deviceId, deviceName }: Props) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [confirm, setConfirm] = useState(false);
 
   async function handleOpen() {
+    setConfirm(false);
     setStatus("loading");
     setMessage("");
 
@@ -43,7 +53,7 @@ export function AdminDoorOpenButton({ deviceId }: Props) {
       <Button
         size="sm"
         variant={status === "success" ? "default" : status === "error" ? "destructive" : "outline"}
-        onClick={handleOpen}
+        onClick={() => setConfirm(true)}
         disabled={status === "loading" || status === "success"}
         className="gap-1.5"
       >
@@ -56,6 +66,19 @@ export function AdminDoorOpenButton({ deviceId }: Props) {
       {message && status === "error" && (
         <span className="text-xs text-destructive">{message}</span>
       )}
+
+      <Dialog open={confirm} onOpenChange={setConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Otvoriti vrata?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{deviceName}</p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirm(false)}>Otkaži</Button>
+            <Button onClick={handleOpen}>Otvori</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
