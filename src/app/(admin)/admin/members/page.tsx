@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { AddMemberDialog } from "./add-member-dialog";
 import { MembersControls } from "./members-controls";
+import { LinkPendingSpinner } from "@/components/shared/link-pending-spinner";
 import { fmtDate, fmtDayMonth, DEFAULT_TZ } from "@/lib/time";
 import { MembershipStatus } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
@@ -185,9 +186,10 @@ export default async function MembersPage({
                     <span className="inline-flex items-center gap-1.5">
                       <Link
                         href={`/admin/members/${member.id}`}
-                        className="hover:text-brand transition-colors"
+                        className="inline-flex items-center gap-1.5 hover:text-brand transition-colors"
                       >
                         {member.name}
+                        <LinkPendingSpinner />
                       </Link>
                       {member.note && (
                         <span title={member.note}>
