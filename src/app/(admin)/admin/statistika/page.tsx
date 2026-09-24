@@ -310,31 +310,29 @@ export default async function StatistikaPage({
             <h2 className="mb-4 font-semibold">Ulasci po danu u nedelji</h2>
             <div className="flex h-32 items-end gap-2">
               {byWeekday.map((count, wd) => (
-                <div key={wd} className="flex flex-1 flex-col items-center gap-1">
-                  <div className="flex w-full flex-1 items-end">
-                    <div
-                      className="w-full rounded-t bg-brand/80 hover:bg-brand"
-                      style={{ height: `${Math.max(2, (count / maxWeekday) * 100)}%` }}
-                      title={`${WEEKDAYS[wd]} — ${count} ulazaka`}
-                    />
-                  </div>
-                  <span
-                    className={cn(
-                      "text-xs",
-                      openWeekday[wd]
-                        ? "text-muted-foreground"
-                        : "text-muted-foreground/50"
-                    )}
-                  >
-                    {WEEKDAYS[wd]}
-                    {!openWeekday[wd] && " ·"}
-                  </span>
-                </div>
+                <div
+                  key={wd}
+                  className="flex-1 rounded-t bg-brand/80 hover:bg-brand"
+                  style={{ height: `${Math.max(2, (count / maxWeekday) * 100)}%` }}
+                  title={`${WEEKDAYS[wd]} — ${count} ulazaka`}
+                />
               ))}
             </div>
-            <p className="mt-2 text-[10px] text-muted-foreground">
-              · = neradni dan
-            </p>
+            <div className="mt-1 flex gap-2">
+              {WEEKDAYS.map((label, wd) => (
+                <span
+                  key={wd}
+                  className={cn(
+                    "flex-1 text-center text-xs",
+                    openWeekday[wd] ? "text-muted-foreground" : "text-muted-foreground/50"
+                  )}
+                >
+                  {label}
+                  {!openWeekday[wd] && " ·"}
+                </span>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-muted-foreground">· = neradni dan</p>
           </Card>
 
           {/* Heatmap: weekday × hour, schedule-aware */}
