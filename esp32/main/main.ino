@@ -42,20 +42,50 @@ const int  POLL_TIMEOUT_MS  = 9000; // server holds 8s, we allow 9s before retry
 // Wire: SDA -> GPIO21, SCL -> GPIO22, VCC -> 3.3V, GND -> GND (shared).
 const int  NFC_I2C_SDA_PIN  = 21;
 const int  NFC_I2C_SCL_PIN  = 22;
-// IRQ/RESET aren't on the module's 4-pin header; the library polls the bus in
-// I2C mode, so these are placeholders the constructor requires.
-const int  NFC_IRQ_PIN      = 4;
-const int  NFC_RESET_PIN    = 5;
+// The module's 4-pin I2C header doesn't break out IRQ/RESET, so the library
+// polls the bus and these are mostly placeholders the constructor requires.
+// IRQ used to be GPIO4 — the SAME pin as the relay — which is a footgun; moved
+// to a free GPIO. RESET stays on GPIO5: solder the module's RSTPDN pad to it and
+// a real hardware reset pulse becomes available for recovering a hung reader.
+const int  NFC_IRQ_PIN      = 27; // was 4 (the relay pin!) — now a free GPIO
+const int  NFC_RESET_PIN    = 5;  // wire module RSTPDN here for a hardware reset
 
 // ─── NFC ──────────────────────────────────────────────────────────────────────
 Adafruit_PN532 nfc(NFC_IRQ_PIN, NFC_RESET_PIN);
 
-// Brings up the I2C bus + reader. Same call sequence as the bench sketch that
-// worked: Wire.begin(pins) then nfc.begin().
+// Brings up the I2C bus + reader. Wire.end() first so a re-init from the health
+// check starts from a clean peripheral state, not a half-configured one.
 void nfcBusBegin() {
+  Wire.end();
   Wire.begin(NFC_I2C_SDA_PIN, NFC_I2C_SCL_PIN);
   nfc.begin();
   delay(200); // give the reader a moment to wake before probing
+}
+
+// Unstick a wedged I2C bus. If the PN532 died mid-transfer it can leave SDA held
+// low, and Wire.begin() alone will NOT clear that — it's the classic "reader
+// dropped out, needs a power cycle" symptom. With the bus de-inited, manually
+// pulse SCL up to 9 times so the slave can finish its byte and release SDA, then
+// drive a STOP condition. Call this before nfcBusBegin() when recovering.
+void i2cBusRecover() {
+  Wire.end();
+  pinMode(NFC_I2C_SCL_PIN, OUTPUT_OPEN_DRAIN);
+  pinMode(NFC_I2C_SDA_PIN, OUTPUT_OPEN_DRAIN);
+  digitalWrite(NFC_I2C_SDA_PIN, HIGH); // open-drain HIGH = release, let the pull-up win
+  for (int i = 0; i < 9; i++) {
+    digitalWrite(NFC_I2C_SCL_PIN, LOW);
+    delayMicroseconds(5);
+    digitalWrite(NFC_I2C_SCL_PIN, HIGH);
+    delayMicroseconds(5);
+    if (digitalRead(NFC_I2C_SDA_PIN) == HIGH) break; // slave let go of SDA
+  }
+  // STOP condition: SDA low->high while SCL is high.
+  digitalWrite(NFC_I2C_SDA_PIN, LOW);
+  delayMicroseconds(5);
+  digitalWrite(NFC_I2C_SCL_PIN, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(NFC_I2C_SDA_PIN, HIGH);
+  delayMicroseconds(5);
 }
 
 // Diagnostic: lists every device that ACKs on the bus. This separates "the
@@ -181,6 +211,7 @@ void setupOTA() {
 Preferences prefs;
 const char*   NVS_NS               = "macaw";
 const uint32_t ALLOWLIST_REFRESH_MS = 15UL * 60UL * 1000UL; // refresh every 15 min
+const uint32_t ALLOWLIST_RETRY_MS   = 30UL * 1000UL;        // but retry a FAILED refresh in 30s
 const uint32_t QUEUE_SYNC_MS        = 30UL * 1000UL;        // retry upload every 30s
 const size_t   MAX_QUEUE_CHARS      = 3000;                 // ~200 queued entries
 
@@ -221,22 +252,25 @@ bool allowlistFresh() {
   return (now - at) <= staleH * 3600UL;
 }
 
-void refreshAllowlist() {
+// Returns true only if a fresh list was actually fetched and cached, so the
+// caller can retry sooner on failure instead of sitting on a stale cache for the
+// full refresh interval.
+bool refreshAllowlist() {
   String path = String("/api/device/") + DEVICE_ID + "/allowlist";
   StaticJsonDocument<128> req;
   req["secret"] = DEVICE_SECRET;
   String body;
   serializeJson(req, body);
   String resp = postJson(path, body);
-  if (resp.isEmpty()) return;
+  if (resp.isEmpty()) return false; // network/server down — keep the old cache
 
   // Parsed by hand: the list can hold hundreds of UIDs and a JSON document
   // that large is a poor use of heap on this device.
   int s = resp.indexOf("\"tags\":[");
-  if (s < 0) return;
+  if (s < 0) return false;
   s += 8;
   int e = resp.indexOf(']', s);
-  if (e < 0) return;
+  if (e < 0) return false;
   String csv = resp.substring(s, e);
   csv.replace("\"", "");
   csv.replace(" ", "");
@@ -255,6 +289,7 @@ void refreshAllowlist() {
   for (size_t i = 0; i < csv.length(); i++) if (csv[i] == ',') count++;
   Serial.printf("[ALLOW] cached %d cards (stale after %luh)\n",
     count, (unsigned long)staleH);
+  return true;
 }
 
 void queueOfflineEntry(const String& tag) {
@@ -387,12 +422,16 @@ void pollDoorCommands() {
 void handleRfidScan(const String& tagId) {
   Serial.printf("[RFID] Tag: %s\n", tagId.c_str());
 
-  // Master cards bypass the server entirely — instant open
+  // Master cards bypass the server entirely — instant open, works offline.
   static const char* masterUids[] = MASTER_UIDS;
   for (size_t i = 0; masterUids[i] != nullptr; i++) {
     if (tagId.equalsIgnoreCase(masterUids[i])) {
       Serial.println("[RFID] MASTER card — opening");
       openDoor();
+      // Audit the bypass so master accesses aren't invisible. Fire-and-forget:
+      // no-ops when offline (master cards must work with no network), so the
+      // door open is never delayed by it.
+      logToServer("INFO", "Master card access: " + tagId);
       return;
     }
   }
@@ -478,9 +517,11 @@ void nfcTask(void* param) {
   // A failed read is indistinguishable from "no card present", so the reader
   // could die mid-run and we'd never notice (the poll task keeps the device
   // "Online"). Actively probe the PN532 on an interval to catch that.
-  const uint32_t NFC_HEALTH_MS = 60000; // probe once a minute
+  const uint32_t NFC_HEALTH_MS = 30000; // probe every 30s so a dropout self-heals fast
+  const int      NFC_REBOOT_AFTER = 20; // still dead after ~10 min of retries -> reboot
   uint32_t lastHealthCheck = millis();
   bool nfcHealthy = true;
+  int  nfcDeadCycles = 0;
 
   for (;;) {
     uint8_t uid[7];
@@ -500,11 +541,14 @@ void nfcTask(void* param) {
       lastHealthCheck = millis();
       bool alive = nfc.getFirmwareVersion() != 0;
 
-      // If it stopped answering, try bringing the bus back up before declaring
-      // it dead — a brief glitch shouldn't need a reboot.
+      // If it stopped answering, escalate recovery WITHOUT a manual power cycle:
+      // first unstick the I2C bus (a hung slave holding SDA low is what a plain
+      // Wire.begin() can't fix), then fully re-init the bus + reader.
       if (!alive) {
+        i2cBusRecover();
         nfcBusBegin();
         alive = nfc.getFirmwareVersion() != 0;
+        if (alive) nfc.SAMConfig();
       }
 
       // Edge-triggered: log only on transitions, so a dead reader alerts once.
@@ -518,6 +562,23 @@ void nfcTask(void* param) {
         Serial.println("[NFC] PN532 recovered");
         logToServer("INFO", "PN532 recovered");
       }
+
+      // Last resort: if bus recovery keeps failing for ~10 min, reboot to re-init
+      // the ESP32 from a clean state. NOTE: a reboot does NOT cut power to the
+      // PN532, so a reader that genuinely needs its VCC cycled will still need the
+      // hardware power-switch mod — but this rescues the common ESP32-side hang
+      // without anyone walking over to pull the plug. pollTask/door-open keep
+      // working right up until the reboot.
+      if (!alive) {
+        if (++nfcDeadCycles >= NFC_REBOOT_AFTER) {
+          Serial.println("[NFC] unrecoverable — rebooting");
+          logToServer("ERROR", "PN532 unrecoverable after retries — rebooting");
+          delay(300);
+          ESP.restart();
+        }
+      } else {
+        nfcDeadCycles = 0;
+      }
     }
   }
 }
@@ -526,13 +587,23 @@ void nfcTask(void* param) {
 void pollTask(void* param) {
   uint32_t lastAllowlist = 0;
   uint32_t lastQueueSync = 0;
+  bool allowlistOk = false; // did the last refresh succeed? drives retry cadence
 
   for (;;) {
     // Keep the offline cache current and flush anything queued during an outage.
     if (WiFi.status() == WL_CONNECTED) {
       setupOTA(); // no-op once started; brings OTA up if WiFi arrived late
-      if (lastAllowlist == 0 || millis() - lastAllowlist >= ALLOWLIST_REFRESH_MS) {
-        refreshAllowlist();
+
+      // If we booted with no network, the clock was never set. Do it now that
+      // WiFi is back — otherwise offline timestamps and allowlist-staleness
+      // (both need a real epoch) stay broken until the next reboot.
+      if (nowEpoch() == 0) syncClock();
+
+      // Refresh on the normal 15-min cadence, but if the last attempt FAILED,
+      // retry in 30s instead of leaving a stale cache un-refreshed for 15 min.
+      uint32_t due = allowlistOk ? ALLOWLIST_REFRESH_MS : ALLOWLIST_RETRY_MS;
+      if (lastAllowlist == 0 || millis() - lastAllowlist >= due) {
+        allowlistOk = refreshAllowlist();
         lastAllowlist = millis();
       }
       if (millis() - lastQueueSync >= QUEUE_SYNC_MS) {
