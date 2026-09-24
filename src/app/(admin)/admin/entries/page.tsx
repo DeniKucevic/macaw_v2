@@ -15,6 +15,10 @@ import { EntriesControls } from "./entries-controls";
 import { fmtShortDateTime, gymDayRange, DEFAULT_TZ } from "@/lib/time";
 import { EntryMethod } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+
+const PAGE_SIZE = 50;
 
 
 const methodLabel: Record<string, string> = {
@@ -26,7 +30,7 @@ const methodLabel: Record<string, string> = {
 export default async function EntriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; period?: string; method?: string }>;
+  searchParams: Promise<{ q?: string; period?: string; method?: string; page?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
@@ -37,8 +41,9 @@ export default async function EntriesPage({
   const gymTz = await db.gym.findUnique({ where: { id: user.gymId }, select: { timezone: true } });
   const tz = gymTz?.timezone || DEFAULT_TZ;
 
-  const { q, period = "7d", method = "all" } = await searchParams;
+  const { q, period = "7d", method = "all", page: pageParam } = await searchParams;
   const search = q?.trim() ?? "";
+  const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
 
   const now = new Date();
   const where: Prisma.EntryWhereInput = { gymId: user.gymId };
@@ -63,24 +68,43 @@ export default async function EntriesPage({
     where.user = { name: { contains: search, mode: "insensitive" } };
   }
 
-  const entries = await db.entry.findMany({
-    where,
-    include: {
-      user: { select: { id: true, name: true } },
-      membership: { include: { plan: true } },
-    },
-    orderBy: { enteredAt: "desc" },
-    take: 100,
-  });
+  // Count the full filtered set so the period/method filters have a VISIBLE
+  // effect (the table itself is paginated, which is why a flat take:100 used to
+  // make every period look identical).
+  const [totalCount, todayCount, entries] = await Promise.all([
+    db.entry.count({ where }),
+    db.entry.count({
+      where: { gymId: user.gymId, enteredAt: { gte: gymToday.start } },
+    }),
+    db.entry.findMany({
+      where,
+      include: {
+        user: { select: { id: true, name: true } },
+        membership: { include: { plan: true } },
+      },
+      orderBy: { enteredAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
-  const todayEntries = entries.filter((e) => e.enteredAt >= gymToday.start);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const pageHref = (p: number) => {
+    const sp = new URLSearchParams();
+    if (search) sp.set("q", search);
+    sp.set("period", period);
+    sp.set("method", method);
+    sp.set("page", String(p));
+    return `/admin/entries?${sp.toString()}`;
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Evidencija ulazaka</h1>
         <p className="text-muted-foreground text-sm">
-          {todayEntries.length} ulazaka danas · {entries.length} prikazano
+          {todayCount} ulazaka danas · {totalCount} u izabranom periodu
         </p>
       </div>
 
@@ -132,6 +156,34 @@ export default async function EntriesPage({
           </TableBody>
         </Table>
       </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">
+            Stranica {page} od {totalPages}
+          </span>
+          <div className="flex gap-2">
+            {page > 1 ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={pageHref(page - 1)}>Prethodna</Link>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                Prethodna
+              </Button>
+            )}
+            {page < totalPages ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href={pageHref(page + 1)}>Sledeća</Link>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" disabled>
+                Sledeća
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

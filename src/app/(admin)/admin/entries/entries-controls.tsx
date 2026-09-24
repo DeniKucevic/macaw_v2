@@ -28,6 +28,7 @@ export function EntriesControls() {
 
   function apply(next: { q?: string; period?: string; method?: string }) {
     const sp = new URLSearchParams(params.toString());
+    sp.delete("page"); // any filter change goes back to the first page
     if (next.q !== undefined) {
       next.q ? sp.set("q", next.q) : sp.delete("q");
     }
