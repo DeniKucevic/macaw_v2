@@ -15,7 +15,9 @@ const PERIODS = [
   { value: "all", label: "Sve vreme" },
 ];
 
+// Index Mon=0..Sun=6, matching date-fns ISO weekday ("i") minus 1.
 const WEEKDAYS = ["Pon", "Uto", "Sre", "Čet", "Pet", "Sub", "Ned"];
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
 const methodLabel: Record<string, string> = {
   RFID: "RFID",
@@ -24,9 +26,11 @@ const methodLabel: Record<string, string> = {
   PIN: "PIN",
 };
 
-// Heat intensity → a fixed set of classes so Tailwind can see them at build time.
+type DayCfg = { isOpen: boolean; open: string; close: string };
+
+// Heat intensity → a fixed set of classes so Tailwind sees them at build time.
 function heatClass(count: number, max: number): string {
-  if (count === 0) return "bg-muted/40";
+  if (count === 0) return "bg-muted/40"; // open but quiet
   const r = count / max;
   if (r > 0.8) return "bg-brand";
   if (r > 0.6) return "bg-brand/80";
@@ -48,9 +52,31 @@ export default async function StatistikaPage({
 
   const gym = await db.gym.findUnique({
     where: { id: user.gymId },
-    select: { timezone: true },
+    select: { timezone: true, hours: true },
   });
   const tz = gym?.timezone || DEFAULT_TZ;
+
+  // Working-hours config (null = always open). Build per-weekday open flag and
+  // open/close hour so we can separate "closed" from "open but quiet".
+  const hoursCfg = gym?.hours as unknown as Record<string, DayCfg> | null;
+  const openWeekday: boolean[] = [];
+  const openStart: number[] = [];
+  const openEnd: number[] = [];
+  for (let wd = 0; wd < 7; wd++) {
+    const c = hoursCfg?.[DAY_KEYS[wd]];
+    if (!hoursCfg) {
+      openWeekday[wd] = true;
+      openStart[wd] = 0;
+      openEnd[wd] = 24;
+    } else {
+      const isOpen = c?.isOpen ?? false;
+      openWeekday[wd] = isOpen;
+      openStart[wd] = isOpen ? parseInt((c?.open ?? "00:00").split(":")[0], 10) : 0;
+      openEnd[wd] = isOpen ? parseInt((c?.close ?? "24:00").split(":")[0], 10) : 0;
+    }
+  }
+  const isCellOpen = (wd: number, h: number) =>
+    openWeekday[wd] && h >= openStart[wd] && h < openEnd[wd];
 
   const { period = "30d" } = await searchParams;
   const now = new Date();
@@ -91,11 +117,28 @@ export default async function StatistikaPage({
   }
 
   const total = rows.length;
-  const days =
+  const dayMs = 86400000;
+
+  // Count only OPEN days in the period, so the average reflects working days
+  // (e.g. Sundays are closed and shouldn't drag the number down).
+  const spanDays =
     period === "all" && total
-      ? Math.max(1, Math.ceil((now.getTime() - earliest.getTime()) / 86400000))
+      ? Math.max(1, Math.ceil((now.getTime() - earliest.getTime()) / dayMs))
       : periodDays;
-  const avgPerDay = total ? total / days : 0;
+  let openDaysCount = 0;
+  for (let i = 0; i < spanDays; i++) {
+    const d = new Date(now.getTime() - i * dayMs);
+    const wd = parseInt(formatInTimeZone(d, tz, "i"), 10) - 1;
+    if (openWeekday[wd]) openDaysCount++;
+  }
+  openDaysCount = Math.max(1, openDaysCount);
+  const avgPerOpenDay = total ? total / openDaysCount : 0;
+
+  // Entries logged outside working hours — worth surfacing (master-card/manual
+  // opens, or someone getting in when the gym is closed).
+  let offHours = 0;
+  for (let wd = 0; wd < 7; wd++)
+    for (let h = 0; h < 24; h++) if (!isCellOpen(wd, h)) offHours += heat[wd][h];
 
   const maxHour = Math.max(1, ...byHour);
   const maxWeekday = Math.max(1, ...byWeekday);
@@ -108,10 +151,15 @@ export default async function StatistikaPage({
 
   const tiles = [
     { label: "Ukupno ulazaka", value: total.toLocaleString("sr-Latn") },
-    { label: "Prosečno dnevno", value: avgPerDay.toFixed(1) },
+    { label: "Po radnom danu", value: avgPerOpenDay.toFixed(1) },
     { label: "Najprometniji sat", value: total ? `${peakHour}:00` : "—" },
     { label: "Najprometniji dan", value: total ? WEEKDAYS[peakWeekday] : "—" },
   ];
+
+  function cellClass(wd: number, h: number, count: number): string {
+    if (!isCellOpen(wd, h)) return count > 0 ? "bg-amber-400/70" : "bg-muted/20";
+    return heatClass(count, maxHeat);
+  }
 
   return (
     <div className="space-y-6">
@@ -119,7 +167,7 @@ export default async function StatistikaPage({
         <div>
           <h1 className="text-2xl font-bold">Statistika</h1>
           <p className="text-muted-foreground text-sm">
-            Ulasci članova, načini i vreme aktivnosti
+            Ulasci članova, načini i vreme aktivnosti · prosek po radnom danu
           </p>
         </div>
         <div className="flex gap-1 rounded-md border border-input p-1">
@@ -171,7 +219,10 @@ export default async function StatistikaPage({
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
+                      <div
+                        className="h-full rounded-full bg-brand"
+                        style={{ width: `${pct}%` }}
+                      />
                     </div>
                   </div>
                 );
@@ -212,31 +263,53 @@ export default async function StatistikaPage({
                       title={`${WEEKDAYS[wd]} — ${count} ulazaka`}
                     />
                   </div>
-                  <span className="text-xs text-muted-foreground">{WEEKDAYS[wd]}</span>
+                  <span
+                    className={cn(
+                      "text-xs",
+                      openWeekday[wd]
+                        ? "text-muted-foreground"
+                        : "text-muted-foreground/50"
+                    )}
+                  >
+                    {WEEKDAYS[wd]}
+                    {!openWeekday[wd] && " ·"}
+                  </span>
                 </div>
               ))}
             </div>
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              · = neradni dan
+            </p>
           </Card>
 
-          {/* Heatmap: weekday × hour */}
+          {/* Heatmap: weekday × hour, schedule-aware */}
           <Card className="p-5">
             <h2 className="mb-1 font-semibold">Mapa aktivnosti</h2>
             <p className="mb-4 text-xs text-muted-foreground">
-              Kada je najprometnije — dan u nedelji × sat
+              Kada je najprometnije — dan u nedelji × sat (radno vreme uzeto u obzir)
             </p>
             <div className="overflow-x-auto">
               <div className="min-w-[560px] space-y-1">
                 {heat.map((rowCounts, wd) => (
                   <div key={wd} className="flex items-center gap-1">
-                    <span className="w-8 shrink-0 text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        "w-8 shrink-0 text-xs",
+                        openWeekday[wd]
+                          ? "text-muted-foreground"
+                          : "text-muted-foreground/40"
+                      )}
+                    >
                       {WEEKDAYS[wd]}
                     </span>
                     <div className="flex flex-1 gap-[2px]">
                       {rowCounts.map((count, h) => (
                         <div
                           key={h}
-                          className={cn("h-5 flex-1 rounded-sm", heatClass(count, maxHeat))}
-                          title={`${WEEKDAYS[wd]} ${h}:00 — ${count} ulazaka`}
+                          className={cn("h-5 flex-1 rounded-sm", cellClass(wd, h, count))}
+                          title={`${WEEKDAYS[wd]} ${h}:00 — ${count} ulazaka${
+                            isCellOpen(wd, h) ? "" : " (van radnog vremena)"
+                          }`}
                         />
                       ))}
                     </div>
@@ -252,6 +325,28 @@ export default async function StatistikaPage({
                 </div>
               </div>
             </div>
+
+            {/* Legend */}
+            <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded-sm bg-brand" /> Prometno
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded-sm bg-muted/40" /> Otvoreno, mirno
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded-sm bg-muted/20" /> Zatvoreno
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded-sm bg-amber-400/70" /> Van radnog vremena
+              </span>
+            </div>
+
+            {offHours > 0 && (
+              <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
+                {offHours} {offHours === 1 ? "ulazak" : "ulazaka"} van radnog vremena u ovom periodu.
+              </p>
+            )}
           </Card>
         </>
       )}
