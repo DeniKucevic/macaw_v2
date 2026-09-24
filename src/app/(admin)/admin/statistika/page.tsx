@@ -7,6 +7,7 @@ import { DEFAULT_TZ, gymDayRange } from "@/lib/time";
 import { formatInTimeZone } from "date-fns-tz";
 import { cn } from "@/lib/utils";
 import type { Prisma } from "@/generated/prisma/client";
+import { Role } from "@/generated/prisma/client";
 
 const PERIODS = [
   { value: "today", label: "Danas" },
@@ -98,6 +99,29 @@ export default async function StatistikaPage({
     where,
     select: { enteredAt: true, method: true },
   });
+
+  // Busiest members — real members only (staff/owner bypass checks and would
+  // otherwise dominate the list).
+  const topRaw = await db.entry.groupBy({
+    by: ["userId"],
+    where: { ...where, userId: { not: null }, user: { role: Role.MEMBER } },
+    _count: { userId: true },
+    orderBy: { _count: { userId: "desc" } },
+    take: 8,
+  });
+  const topIds = topRaw.map((r) => r.userId).filter((x): x is string => !!x);
+  const topUsers = topIds.length
+    ? await db.user.findMany({
+        where: { id: { in: topIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const nameById = new Map(topUsers.map((u) => [u.id, u.name]));
+  const topMembers = topRaw.map((r) => ({
+    id: r.userId as string,
+    name: nameById.get(r.userId as string) ?? "Nepoznat",
+    count: r._count.userId,
+  }));
 
   // Bucket everything in the gym's timezone.
   const byHour = new Array(24).fill(0) as number[];
@@ -229,6 +253,37 @@ export default async function StatistikaPage({
               })}
             </div>
           </Card>
+
+          {/* Busiest members */}
+          {topMembers.length > 0 && (
+            <Card className="p-5">
+              <h2 className="mb-4 font-semibold">Najaktivniji članovi</h2>
+              <div className="space-y-2">
+                {topMembers.map((m, i) => (
+                  <div key={m.id} className="flex items-center gap-3">
+                    <span className="w-4 text-right text-sm text-muted-foreground">
+                      {i + 1}
+                    </span>
+                    <Link
+                      href={`/admin/members/${m.id}`}
+                      className="flex-1 truncate text-sm font-medium hover:text-brand hover:underline"
+                    >
+                      {m.name}
+                    </Link>
+                    <div className="h-2 w-24 overflow-hidden rounded-full bg-muted sm:w-40">
+                      <div
+                        className="h-full rounded-full bg-brand"
+                        style={{ width: `${(m.count / topMembers[0].count) * 100}%` }}
+                      />
+                    </div>
+                    <span className="w-10 text-right text-sm text-muted-foreground">
+                      {m.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Entries by hour */}
           <Card className="p-5">
