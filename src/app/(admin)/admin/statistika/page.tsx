@@ -81,6 +81,27 @@ export default async function StatistikaPage({
   // Only render days the gym is actually open — no point showing empty closed days.
   const openDayIndices = [0, 1, 2, 3, 4, 5, 6].filter((wd) => openWeekday[wd]);
 
+  // ...and only span the hours it's open (union of open windows across open days),
+  // so the charts don't waste space on the middle of the night.
+  const minOpenHour = openDayIndices.length
+    ? Math.min(...openDayIndices.map((wd) => openStart[wd]))
+    : 0;
+  const maxOpenHour = openDayIndices.length
+    ? Math.max(...openDayIndices.map((wd) => openEnd[wd]))
+    : 24;
+  const displayHours: number[] = [];
+  for (let h = minOpenHour; h < maxOpenHour; h++) displayHours.push(h);
+  if (displayHours.length === 0) for (let h = 0; h < 24; h++) displayHours.push(h);
+
+  // A few evenly-spaced labels for the hour axes.
+  const axisHours = Array.from(
+    new Set(
+      [0, 0.33, 0.66, 1]
+        .map((f) => displayHours[Math.floor(f * (displayHours.length - 1))])
+        .filter((h) => h !== undefined)
+    )
+  );
+
   const { period = "30d" } = await searchParams;
   const now = new Date();
 
@@ -166,9 +187,12 @@ export default async function StatistikaPage({
   for (let wd = 0; wd < 7; wd++)
     for (let h = 0; h < 24; h++) if (!isCellOpen(wd, h)) offHours += heat[wd][h];
 
-  const maxHour = Math.max(1, ...byHour);
+  const maxHour = Math.max(1, ...displayHours.map((h) => byHour[h]));
   const maxWeekday = Math.max(1, ...openDayIndices.map((wd) => byWeekday[wd]));
-  const maxHeat = Math.max(1, ...heat.flat());
+  const maxHeat = Math.max(
+    1,
+    ...openDayIndices.flatMap((wd) => displayHours.map((h) => heat[wd][h]))
+  );
 
   const peakHour = byHour.indexOf(Math.max(...byHour));
   const peakWeekday = openDayIndices.length
@@ -293,17 +317,17 @@ export default async function StatistikaPage({
           <Card className="p-5">
             <h2 className="mb-4 font-semibold">Ulasci po satu</h2>
             <div className="flex h-40 items-end gap-[3px]">
-              {byHour.map((count, h) => (
+              {displayHours.map((h) => (
                 <div
                   key={h}
                   className="flex-1 rounded-t bg-brand/80 transition-colors hover:bg-brand"
-                  style={{ height: `${Math.max(2, (count / maxHour) * 100)}%` }}
-                  title={`${h}:00 — ${count} ulazaka`}
+                  style={{ height: `${Math.max(2, (byHour[h] / maxHour) * 100)}%` }}
+                  title={`${h}:00 — ${byHour[h]} ulazaka`}
                 />
               ))}
             </div>
             <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-              {[0, 6, 12, 18, 23].map((h) => (
+              {axisHours.map((h) => (
                 <span key={h}>{h}:00</span>
               ))}
             </div>
@@ -345,11 +369,11 @@ export default async function StatistikaPage({
                       {WEEKDAYS[wd]}
                     </span>
                     <div className="flex flex-1 gap-[2px]">
-                      {heat[wd].map((count, h) => (
+                      {displayHours.map((h) => (
                         <div
                           key={h}
-                          className={cn("h-5 flex-1 rounded-sm", cellClass(wd, h, count))}
-                          title={`${WEEKDAYS[wd]} ${h}:00 — ${count} ulazaka${
+                          className={cn("h-5 flex-1 rounded-sm", cellClass(wd, h, heat[wd][h]))}
+                          title={`${WEEKDAYS[wd]} ${h}:00 — ${heat[wd][h]} ulazaka${
                             isCellOpen(wd, h) ? "" : " (van radnog vremena)"
                           }`}
                         />
@@ -360,7 +384,7 @@ export default async function StatistikaPage({
                 <div className="flex items-center gap-1 pt-1">
                   <span className="w-8 shrink-0" />
                   <div className="flex flex-1 justify-between text-[10px] text-muted-foreground">
-                    {[0, 6, 12, 18, 23].map((h) => (
+                    {axisHours.map((h) => (
                       <span key={h}>{h}h</span>
                     ))}
                   </div>
