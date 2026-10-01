@@ -78,6 +78,8 @@ export default async function StatistikaPage({
   }
   const isCellOpen = (wd: number, h: number) =>
     openWeekday[wd] && h >= openStart[wd] && h < openEnd[wd];
+  // Only render days the gym is actually open — no point showing empty closed days.
+  const openDayIndices = [0, 1, 2, 3, 4, 5, 6].filter((wd) => openWeekday[wd]);
 
   const { period = "30d" } = await searchParams;
   const now = new Date();
@@ -165,11 +167,13 @@ export default async function StatistikaPage({
     for (let h = 0; h < 24; h++) if (!isCellOpen(wd, h)) offHours += heat[wd][h];
 
   const maxHour = Math.max(1, ...byHour);
-  const maxWeekday = Math.max(1, ...byWeekday);
+  const maxWeekday = Math.max(1, ...openDayIndices.map((wd) => byWeekday[wd]));
   const maxHeat = Math.max(1, ...heat.flat());
 
   const peakHour = byHour.indexOf(Math.max(...byHour));
-  const peakWeekday = byWeekday.indexOf(Math.max(...byWeekday));
+  const peakWeekday = openDayIndices.length
+    ? openDayIndices.reduce((b, wd) => (byWeekday[wd] > byWeekday[b] ? wd : b), openDayIndices[0])
+    : 0;
 
   const methods = Object.entries(byMethod).sort((a, b) => b[1] - a[1]);
 
@@ -309,30 +313,22 @@ export default async function StatistikaPage({
           <Card className="p-5">
             <h2 className="mb-4 font-semibold">Ulasci po danu u nedelji</h2>
             <div className="flex h-32 items-end gap-2">
-              {byWeekday.map((count, wd) => (
+              {openDayIndices.map((wd) => (
                 <div
                   key={wd}
                   className="flex-1 rounded-t bg-brand/80 hover:bg-brand"
-                  style={{ height: `${Math.max(2, (count / maxWeekday) * 100)}%` }}
-                  title={`${WEEKDAYS[wd]} — ${count} ulazaka`}
+                  style={{ height: `${Math.max(2, (byWeekday[wd] / maxWeekday) * 100)}%` }}
+                  title={`${WEEKDAYS[wd]} — ${byWeekday[wd]} ulazaka`}
                 />
               ))}
             </div>
             <div className="mt-1 flex gap-2">
-              {WEEKDAYS.map((label, wd) => (
-                <span
-                  key={wd}
-                  className={cn(
-                    "flex-1 text-center text-xs",
-                    openWeekday[wd] ? "text-muted-foreground" : "text-muted-foreground/50"
-                  )}
-                >
-                  {label}
-                  {!openWeekday[wd] && " ·"}
+              {openDayIndices.map((wd) => (
+                <span key={wd} className="flex-1 text-center text-xs text-muted-foreground">
+                  {WEEKDAYS[wd]}
                 </span>
               ))}
             </div>
-            <p className="mt-2 text-[10px] text-muted-foreground">· = neradni dan</p>
           </Card>
 
           {/* Heatmap: weekday × hour, schedule-aware */}
@@ -343,20 +339,13 @@ export default async function StatistikaPage({
             </p>
             <div className="overflow-x-auto">
               <div className="min-w-[560px] space-y-1">
-                {heat.map((rowCounts, wd) => (
+                {openDayIndices.map((wd) => (
                   <div key={wd} className="flex items-center gap-1">
-                    <span
-                      className={cn(
-                        "w-8 shrink-0 text-xs",
-                        openWeekday[wd]
-                          ? "text-muted-foreground"
-                          : "text-muted-foreground/40"
-                      )}
-                    >
+                    <span className="w-8 shrink-0 text-xs text-muted-foreground">
                       {WEEKDAYS[wd]}
                     </span>
                     <div className="flex flex-1 gap-[2px]">
-                      {rowCounts.map((count, h) => (
+                      {heat[wd].map((count, h) => (
                         <div
                           key={h}
                           className={cn("h-5 flex-1 rounded-sm", cellClass(wd, h, count))}
