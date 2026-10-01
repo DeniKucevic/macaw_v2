@@ -27,17 +27,26 @@ const methodLabel: Record<string, string> = {
   PIN: "PIN",
 };
 
+// Categorical colors from the app's chart palette (shadcn --chart-1..5),
+// assigned in fixed order so a method keeps its color.
+const methodColor: Record<string, string> = {
+  RFID: "bg-chart-1",
+  PHONE: "bg-chart-2",
+  MANUAL: "bg-chart-3",
+  PIN: "bg-chart-4",
+};
+
 type DayCfg = { isOpen: boolean; open: string; close: string };
 
 // Heat intensity → a fixed set of classes so Tailwind sees them at build time.
 function heatClass(count: number, max: number): string {
   if (count === 0) return "bg-muted/40"; // open but quiet
   const r = count / max;
-  if (r > 0.8) return "bg-brand";
-  if (r > 0.6) return "bg-brand/80";
-  if (r > 0.4) return "bg-brand/60";
-  if (r > 0.2) return "bg-brand/40";
-  return "bg-brand/20";
+  if (r > 0.8) return "bg-chart-3";
+  if (r > 0.6) return "bg-chart-3/80";
+  if (r > 0.4) return "bg-chart-3/60";
+  if (r > 0.2) return "bg-chart-3/40";
+  return "bg-chart-3/20";
 }
 
 export default async function StatistikaPage({
@@ -265,14 +274,22 @@ export default async function StatistikaPage({
                 return (
                   <div key={m}>
                     <div className="mb-1 flex justify-between text-sm">
-                      <span>{methodLabel[m] ?? m}</span>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-block h-2.5 w-2.5 rounded-sm",
+                            methodColor[m] ?? "bg-chart-1"
+                          )}
+                        />
+                        {methodLabel[m] ?? m}
+                      </span>
                       <span className="text-muted-foreground">
                         {count.toLocaleString("sr-Latn")} · {pct}%
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
                       <div
-                        className="h-full rounded-full bg-brand"
+                        className={cn("h-full rounded-full", methodColor[m] ?? "bg-chart-1")}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -300,7 +317,7 @@ export default async function StatistikaPage({
                     </Link>
                     <div className="h-2 w-24 overflow-hidden rounded-full bg-muted sm:w-40">
                       <div
-                        className="h-full rounded-full bg-brand"
+                        className="h-full rounded-full bg-chart-5"
                         style={{ width: `${(m.count / topMembers[0].count) * 100}%` }}
                       />
                     </div>
@@ -320,7 +337,7 @@ export default async function StatistikaPage({
               {displayHours.map((h) => (
                 <div
                   key={h}
-                  className="flex-1 rounded-t bg-brand/80 transition-colors hover:bg-brand"
+                  className="flex-1 rounded-t bg-chart-2 transition-opacity hover:opacity-70"
                   style={{ height: `${Math.max(2, (byHour[h] / maxHour) * 100)}%` }}
                   title={`${h}:00 — ${byHour[h]} ulazaka`}
                 />
@@ -340,7 +357,7 @@ export default async function StatistikaPage({
               {openDayIndices.map((wd) => (
                 <div
                   key={wd}
-                  className="flex-1 rounded-t bg-brand/80 hover:bg-brand"
+                  className="flex-1 rounded-t bg-chart-4 transition-opacity hover:opacity-70"
                   style={{ height: `${Math.max(2, (byWeekday[wd] / maxWeekday) * 100)}%` }}
                   title={`${WEEKDAYS[wd]} — ${byWeekday[wd]} ulazaka`}
                 />
@@ -395,7 +412,7 @@ export default async function StatistikaPage({
             {/* Legend */}
             <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
               <span className="flex items-center gap-1">
-                <span className="inline-block h-3 w-3 rounded-sm bg-brand" /> Prometno
+                <span className="inline-block h-3 w-3 rounded-sm bg-chart-3" /> Prometno
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-3 w-3 rounded-sm bg-muted/40" /> Otvoreno, mirno
